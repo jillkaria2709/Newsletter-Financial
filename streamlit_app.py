@@ -145,8 +145,8 @@ def truncate_content(content, max_chars=4000):
 
 def generate_newsletter():
     try:
-        # Query and process news collection
-        news_results = news_collection.query(query_texts=[""], n_results=1000)
+        # Query and process news collection - Limit to Top 5
+        news_results = news_collection.query(query_texts=[""], n_results=5)
         raw_news_content = "\n".join(
             [
                 f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
@@ -162,7 +162,7 @@ def generate_newsletter():
         )
         summarized_news = summarize_content(
             raw_news_content, 
-            "Summarize the following news content for a financial newsletter:"
+            "Summarize the following top 5 news items for a financial newsletter:"
         )
 
         # Query and process ticker trends collection
@@ -198,6 +198,7 @@ def generate_newsletter():
         st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
+
 
 def summarize_content(content, role_description="Summarize the following content:"):
     """
