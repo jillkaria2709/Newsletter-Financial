@@ -172,12 +172,8 @@ def generate_newsletter():
             ]
         )
 
-        # Truncate content to avoid token limits
-        truncated_news_content = truncate_content(news_content, max_chars=3000)
-        truncated_ticker_content = truncate_content(ticker_content, max_chars=3000)
-
-        # Combine truncated data
-        combined_data = f"News Summaries:\n{truncated_news_content}\n\nTicker Trends:\n{truncated_ticker_content}"
+        # Combine data for OpenAI
+        combined_data = f"News Summaries:\n{news_content}\n\nTicker Trends:\n{ticker_content}"
 
         # Generate newsletter using OpenAI
         response = openai_client.chat.completions.create(
@@ -187,7 +183,9 @@ def generate_newsletter():
                 {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_data}"}
             ]
         )
-        newsletter = response["choices"][0]["message"]["content"]
+
+        # Accessing the correct part of the response
+        newsletter = response.choices[0].message.content
 
         # Display the newsletter
         st.subheader("Generated Newsletter")
