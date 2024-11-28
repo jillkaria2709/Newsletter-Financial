@@ -242,11 +242,5 @@ def summarize_content(content, role_description="Summarize the following content
 # Main Logic
 if option == "Load News Data":
     load_news_data()
-elif option == "Retrieve News Data":
-    retrieve_news_data()
-elif option == "Load Ticker Trends Data":
-    load_ticker_trends_data()
-elif option == "Retrieve Ticker Trends Data":
-    retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
     generate_newsletter()
