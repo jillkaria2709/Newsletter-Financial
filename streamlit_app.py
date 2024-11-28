@@ -182,6 +182,10 @@ def generate_newsletter():
             if isinstance(meta, dict) and meta.get("type") == "top_losers"
         ]
 
+        # Debugging - Log the data to verify
+        st.write("Gainers Data:", gainers)
+        st.write("Losers Data:", losers)
+
         # Take any top 5 gainers and losers
         top_5_gainers = gainers[:5]
         top_5_losers = losers[:5]
