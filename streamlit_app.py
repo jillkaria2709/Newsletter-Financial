@@ -25,7 +25,7 @@ st.title("Alpha Vantage RAG System")
 st.sidebar.header("Options")
 option = st.sidebar.radio(
     "Choose an action:",
-    ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
+    ["Load News Data","Generate Newsletter"]
 )
 
 # Initialize ChromaDB Collections
