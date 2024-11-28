@@ -140,8 +140,10 @@ def generate_newsletter():
             query_texts=[""],  # Empty query text to fetch all documents
             n_results=1000     # A high number to ensure all documents are fetched
         )
+        # Parse documents and metadata properly
         news_content = "\n".join(
-            [f"{meta['title']}: {json.loads(doc)['summary']}" for doc, meta in zip(news_results["documents"], news_results["metadatas"])]
+            [f"{json.loads(meta)['title']}: {json.loads(doc)['summary']}" 
+             for doc, meta in zip(news_results["documents"], news_results["metadatas"])]
         )
 
         # Retrieve all documents from the ticker trends collection
@@ -149,8 +151,10 @@ def generate_newsletter():
             query_texts=[""],  # Empty query text to fetch all documents
             n_results=1000     # A high number to ensure all documents are fetched
         )
+        # Parse documents and metadata properly
         ticker_content = "\n".join(
-            [f"{meta['type']}: {doc}" for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])]
+            [f"{json.loads(meta)['type']}: {json.loads(doc)}" 
+             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])]
         )
 
         # Combine data for OpenAI
