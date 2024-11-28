@@ -147,13 +147,13 @@ def generate_newsletter():
         # Process news results
         raw_news_content = "\n".join(
             [
-                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
-                f"Source: {doc.get('source', 'Unknown')}\n"
-                f"Published: {doc.get('time_published', 'Unknown')}\n"
-                f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
-                f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
-                f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
-                for doc in json.loads(news_results["documents"][0])  # Assuming single document list
+                f"{json.loads(doc).get('title', 'No Title')}: {json.loads(doc).get('summary', 'No Summary')}\n"
+                f"Source: {json.loads(doc).get('source', 'Unknown')}\n"
+                f"Published: {json.loads(doc).get('time_published', 'Unknown')}\n"
+                f"Sentiment: {json.loads(doc).get('overall_sentiment_label', 'Unknown')} "
+                f"(Score: {json.loads(doc).get('overall_sentiment_score', 'N/A')})\n"
+                f"Topics: {', '.join(json.loads(doc).get('topics', [])) if isinstance(json.loads(doc).get('topics', []), list) else 'N/A'}"
+                for doc in news_results["documents"]
             ]
         )
 
@@ -166,17 +166,16 @@ def generate_newsletter():
         gainers_results = ticker_collection.get(ids=["top_gainers"])
         losers_results = ticker_collection.get(ids=["top_losers"])
 
-        # Process gainers
-        if "documents" in gainers_results and gainers_results["documents"]:
-            gainers = json.loads(gainers_results["documents"][0])[:5]  # Take top 5 gainers
-        else:
-            gainers = []
+        if "documents" not in gainers_results or not gainers_results["documents"]:
+            st.error("No gainers data found.")
+            return
+        if "documents" not in losers_results or not losers_results["documents"]:
+            st.error("No losers data found.")
+            return
 
-        # Process losers
-        if "documents" in losers_results and losers_results["documents"]:
-            losers = json.loads(losers_results["documents"][0])[:5]  # Take top 5 losers
-        else:
-            losers = []
+        # Parse the top gainers and losers
+        gainers = json.loads(gainers_results["documents"][0])[:5]  # Top 5 gainers
+        losers = json.loads(losers_results["documents"][0])[:5]  # Top 5 losers
 
         # Prepare summarized gainers and losers data
         gainers_content = "\n".join(
