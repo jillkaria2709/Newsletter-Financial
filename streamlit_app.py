@@ -143,11 +143,28 @@ def truncate_content(content, max_chars=4000):
         return content[:max_chars] + "\n\n[Content truncated...]"
     return content
 
+def summarize_content(content, role_description="Summarize the following content:"):
+    """
+    Summarize a given content string using OpenAI.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful summarizer."},
+                {"role": "user", "content": f"{role_description}\n{content}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error during summarization: {e}")
+        return "Error during summarization."
+
 def generate_newsletter():
     try:
-        # Query news collection
+        # Query and process news collection
         news_results = news_collection.query(query_texts=[""], n_results=1000)
-        news_content = "\n".join(
+        raw_news_content = "\n".join(
             [
                 f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
                 f"Source: {doc.get('source', 'Unknown')}\n"
@@ -160,10 +177,11 @@ def generate_newsletter():
                 for doc in news_results["documents"]
             ]
         )
+        summarized_news = summarize_content(raw_news_content, "Summarize the following news content for a newsletter:")
 
-        # Query ticker trends collection
+        # Query and process ticker trends collection
         ticker_results = ticker_collection.query(query_texts=[""], n_results=1000)
-        ticker_content = "\n".join(
+        raw_ticker_content = "\n".join(
             [
                 f"{meta.get('type', 'Unknown Type')}: {doc}"
                 if isinstance(doc, dict) else
@@ -171,20 +189,19 @@ def generate_newsletter():
                 for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
             ]
         )
+        summarized_tickers = summarize_content(raw_ticker_content, "Summarize the following ticker trends content for a newsletter:")
 
-        # Combine data for OpenAI
-        combined_data = f"News Summaries:\n{news_content}\n\nTicker Trends:\n{ticker_content}"
+        # Combine summarized data for the newsletter
+        combined_data = f"News Summaries:\n{summarized_news}\n\nTicker Trends:\n{summarized_tickers}"
 
-        # Generate newsletter using OpenAI
+        # Generate the final newsletter
         response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a financial newsletter editor."},
-                {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_data}"}
+                {"role": "user", "content": f"Generate a newsletter using the following summarized data:\n{combined_data}"}
             ]
         )
-
-        # Accessing the correct part of the response
         newsletter = response.choices[0].message.content
 
         # Display the newsletter
