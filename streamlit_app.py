@@ -132,6 +132,7 @@ def retrieve_ticker_trends_data():
                 st.warning("No data found.")
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
+
 def generate_newsletter():
     try:
         # Retrieve all documents from the news collection
@@ -139,10 +140,14 @@ def generate_newsletter():
             query_texts=[""],  # Empty query text to fetch all documents
             n_results=1000     # Fetch up to 1000 documents
         )
-        # Extract summaries and titles directly without unnecessary parsing
+        
+        # Ensure documents are parsed into dictionaries
         news_content = "\n".join(
-            [f"{meta['title']}: {doc['summary']}" 
-             for doc, meta in zip(news_results["documents"], news_results["metadatas"])]
+            [
+                f"{json.loads(doc)['title']}: {json.loads(doc)['summary']}" 
+                if isinstance(doc, str) else f"{doc['title']}: {doc['summary']}"
+                for doc in news_results["documents"]
+            ]
         )
 
         # Retrieve all documents from the ticker trends collection
@@ -150,10 +155,14 @@ def generate_newsletter():
             query_texts=[""],  # Empty query text to fetch all documents
             n_results=1000     # Fetch up to 1000 documents
         )
-        # Extract ticker information directly
+        
+        # Ensure documents are parsed into dictionaries
         ticker_content = "\n".join(
-            [f"{meta['type']}: {doc}" 
-             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])]
+            [
+                f"{meta['type']}: {json.loads(doc)}" 
+                if isinstance(doc, str) else f"{meta['type']}: {doc}"
+                for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
+            ]
         )
 
         # Combine data for OpenAI
@@ -174,6 +183,7 @@ def generate_newsletter():
         st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
+
 
 # Main Logic
 if option == "Load News Data":
