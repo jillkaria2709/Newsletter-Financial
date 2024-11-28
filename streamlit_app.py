@@ -143,11 +143,10 @@ def generate_newsletter():
             n_results=1000     # Fetch up to 1000 documents
         )
         
-        # Ensure documents are parsed into dictionaries
+        # Process news data
         news_content = "\n".join(
             [
-                f"{json.loads(doc)['title']}: {json.loads(doc)['summary']}" 
-                if isinstance(doc, str) else f"{doc['title']}: {doc['summary']}"
+                f"{doc['title']}: {doc['summary']}\nSource: {doc['source']}\nPublished: {doc['time_published']}\nSentiment: {doc['overall_sentiment_label']} (Score: {doc['overall_sentiment_score']})\nTopics: {', '.join(doc['topics'])}"
                 for doc in news_results["documents"]
             ]
         )
@@ -158,12 +157,11 @@ def generate_newsletter():
             n_results=1000     # Fetch up to 1000 documents
         )
         
-        # Ensure documents are parsed into dictionaries
+        # Process ticker data
         ticker_content = "\n".join(
             [
-                f"{meta['type']}: {json.loads(doc)}" 
-                if isinstance(doc, str) else f"{meta['type']}: {doc}"
-                for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
+                f"{doc['ticker']}: ${doc['price']} (Change: {doc['change_amount']} | {doc['change_percentage']}%)\nVolume: {doc['volume']}"
+                for doc in ticker_results["documents"]
             ]
         )
 
