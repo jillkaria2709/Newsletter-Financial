@@ -145,16 +145,8 @@ def truncate_content(content, max_chars=4000):
 
 def generate_newsletter():
     try:
-        # Query and process news collection
-        news_results = news_collection.query(query_texts=[""], n_results=1000)
-
-        # Sort news by publication date (newest first) and take top 5
-        top_5_news = sorted(
-            news_results["documents"],
-            key=lambda x: x.get("time_published", "19700101T000000"),
-            reverse=True
-        )[:5]
-
+        # Query and process news collection - Limit to Top 5
+        news_results = news_collection.query(query_texts=[""], n_results=5)
         raw_news_content = "\n".join(
             [
                 f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
@@ -165,10 +157,9 @@ def generate_newsletter():
                 f"Topics: {', '.join(doc.get('topics', []))}"
                 if isinstance(doc, dict) else
                 f"Unstructured Document: {doc}"
-                for doc in top_5_news
+                for doc in news_results["documents"]
             ]
         )
-
         summarized_news = summarize_content(
             raw_news_content, 
             "Summarize the following top 5 news items for a financial newsletter:"
@@ -207,6 +198,24 @@ def generate_newsletter():
         st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
+
+
+def summarize_content(content, role_description="Summarize the following content:"):
+    """
+    Summarize a given content string using OpenAI.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful summarizer."},
+                {"role": "user", "content": f"{role_description}\n{content}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error during summarization: {e}")
+        return "Error during summarization."
 
 
 # Main Logic
