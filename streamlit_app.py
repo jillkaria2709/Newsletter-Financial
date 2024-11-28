@@ -3,9 +3,9 @@ import requests
 import json
 import chromadb
 from chromadb.config import Settings
-from crewai import Agent, Task, Crew, Process
-from openai import OpenAI
+from crewai import Agent
 from crewai_tools import BaseTool
+from openai import OpenAI
 
 # Initialize OpenAI and ChromaDB Clients
 openai_client = OpenAI(api_key=st.secrets["api_keys"]["openai"])
@@ -16,27 +16,6 @@ api_key = st.secrets["api_keys"]["alpha_vantage"]
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={api_key}'
 
-# Custom ChromaDB Tool
-class ChromaDBTool(BaseTool):
-    def __init__(self, collection_name):
-        self.client = chromadb.PersistentClient()
-        self.collection = self.client.get_or_create_collection(collection_name)
-
-    def execute(self, query):
-        if "query_text" in query:
-            # Query ChromaDB
-            return self.collection.query(query_text=query["query_text"], n_results=query.get("n_results", 5))
-        elif "add" in query:
-            # Add to ChromaDB
-            self.collection.add(
-                ids=query["add"]["ids"],
-                metadatas=query["add"]["metadatas"],
-                documents=query["add"]["documents"],
-            )
-            return "Data added successfully."
-        else:
-            raise ValueError("Unsupported operation.")
-
 # Streamlit App Title
 st.title("Financial Insights Newsletter Generator")
 
@@ -46,6 +25,27 @@ option = st.sidebar.radio(
     "Choose an action:",
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
+
+# Custom Tool: ChromaDB Integration
+class ChromaDBTool(BaseTool):
+    def __init__(self, collection_name):
+        self.client = chromadb.PersistentClient()
+        self.collection = self.client.get_or_create_collection(collection_name)
+
+    def execute(self, query):
+        if "query_text" in query:
+            # Perform semantic search
+            return self.collection.query(query_text=query["query_text"], n_results=query.get("n_results", 5))
+        elif "add" in query:
+            # Add documents to the collection
+            self.collection.add(
+                ids=query["add"]["ids"],
+                metadatas=query["add"]["metadatas"],
+                documents=query["add"]["documents"],
+            )
+            return "Data added successfully."
+        else:
+            raise ValueError("Unsupported operation.")
 
 ### Function to Load News Data into ChromaDB ###
 def load_news_data():
