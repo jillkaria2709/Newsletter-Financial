@@ -135,48 +135,63 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
 
-def batch_process(content_list, batch_size=5):
+def truncate_content(content, max_chars=4000):
     """
-    Break a list of content into smaller batches.
+    Truncate content to a maximum number of characters.
     """
-    for i in range(0, len(content_list), batch_size):
-        yield content_list[i:i + batch_size]
+    if len(content) > max_chars:
+        return content[:max_chars] + "\n\n[Content truncated...]"
+    return content
 
 def generate_newsletter():
     try:
         # Query news collection
         news_results = news_collection.query(query_texts=[""], n_results=1000)
+        news_content = "\n".join(
+            [
+                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
+                f"Source: {doc.get('source', 'Unknown')}\n"
+                f"Published: {doc.get('time_published', 'Unknown')}\n"
+                f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
+                f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
+                f"Topics: {', '.join(doc.get('topics', []))}"
+                if isinstance(doc, dict) else
+                f"Unstructured Document: {doc}"
+                for doc in news_results["documents"]
+            ]
+        )
+
+        # Query ticker trends collection
         ticker_results = ticker_collection.query(query_texts=[""], n_results=1000)
+        ticker_content = "\n".join(
+            [
+                f"{meta.get('type', 'Unknown Type')}: {doc}"
+                if isinstance(doc, dict) else
+                f"Unstructured Document: {doc}"
+                for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
+            ]
+        )
 
-        # Combine and batch process
-        all_content = news_results["documents"] + ticker_results["documents"]
-        batches = list(batch_process(all_content, batch_size=50))
+        # Truncate content to avoid token limits
+        truncated_news_content = truncate_content(news_content, max_chars=3000)
+        truncated_ticker_content = truncate_content(ticker_content, max_chars=3000)
 
-        newsletter_parts = []
-        for batch in batches:
-            batch_content = "\n".join(
-                [
-                    f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}"
-                    if isinstance(doc, dict) else str(doc)
-                    for doc in batch
-                ]
-            )
+        # Combine truncated data
+        combined_data = f"News Summaries:\n{truncated_news_content}\n\nTicker Trends:\n{truncated_ticker_content}"
 
-            response = openai_client.chat.completions.create(
-                model="gpt-4",
-                messages=[
-                    {"role": "system", "content": "You are a financial newsletter editor."},
-                    {"role": "user", "content": f"Generate a newsletter using the following batch:\n{batch_content}"}
-                ]
-            )
-            newsletter_parts.append(response["choices"][0]["message"]["content"])
-
-        # Combine parts into final newsletter
-        full_newsletter = "\n\n".join(newsletter_parts)
+        # Generate newsletter using OpenAI
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a financial newsletter editor."},
+                {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_data}"}
+            ]
+        )
+        newsletter = response["choices"][0]["message"]["content"]
 
         # Display the newsletter
         st.subheader("Generated Newsletter")
-        st.write(full_newsletter)
+        st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
