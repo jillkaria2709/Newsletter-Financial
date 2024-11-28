@@ -3,14 +3,20 @@ import requests
 import json
 import chromadb
 from chromadb.config import Settings
+from crewai import Agent, Task, Crew, Process
+from crewai_tools import ChromaDBTool
+from openai import ChatCompletion
+
+# Access API keys from Streamlit secrets
+alpha_vantage_api_key = st.secrets["api_keys"]["alpha_vantage"]
+openai_api_key = st.secrets["api_keys"]["openai"]
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
 
-# API key and URLs for Alpha Vantage
-api_key = 'H329FP3SD3PO0M7H'  # Replace with your Alpha Vantage API key
-news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
-tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={api_key}'
+# API URLs
+news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_api_key}&limit=50'
+tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_api_key}'
 
 # Streamlit App Title
 st.title("Alpha Vantage RAG System")
@@ -18,16 +24,14 @@ st.title("Alpha Vantage RAG System")
 # Sidebar options
 st.sidebar.header("Options")
 option = st.sidebar.radio(
-    "Choose an action:", 
-    ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data"]
+    "Choose an action:",
+    ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
 
 ### Function to Load News Data into ChromaDB ###
 def load_news_data():
-    # Create or access a collection for news data
     news_collection = client.get_or_create_collection("news_sentiment_data")
 
-    # Fetch data from the API
     try:
         response = requests.get(news_url)
         response.raise_for_status()
@@ -36,7 +40,6 @@ def load_news_data():
         if 'feed' in data:
             news_items = data['feed']
             for i, item in enumerate(news_items, start=1):
-                # Prepare the document and metadata
                 document = {
                     "id": str(i),
                     "title": item["title"],
@@ -57,12 +60,9 @@ def load_news_data():
                         for ticker in item.get("ticker_sentiment", [])
                     ],
                 }
-                
-                # Convert lists in metadata to strings
                 topics_str = ", ".join(document["topics"])
                 ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
 
-                # Insert the document into the ChromaDB collection
                 news_collection.add(
                     ids=[document["id"]],
                     metadatas=[{
@@ -85,10 +85,8 @@ def load_news_data():
 
 ### Function to Retrieve News Data from ChromaDB ###
 def retrieve_news_data():
-    # Access the collection
     news_collection = client.get_or_create_collection("news_sentiment_data")
 
-    # Input ID for retrieval
     doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
 
     if st.button("Retrieve News"):
@@ -106,27 +104,19 @@ def retrieve_news_data():
 
 ### Function to Load Ticker Trends Data into ChromaDB ###
 def load_ticker_trends_data():
-    # Create or access a collection for ticker trends
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
     try:
-        # Fetch data from the API
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
 
-        # Validate data structure
         if "metadata" in data and "top_gainers" in data:
-            # Decompose data for structured storage
-            metadata = {
-                "metadata": data["metadata"],
-                "last_updated": data["last_updated"],
-            }
+            metadata = {"metadata": data["metadata"], "last_updated": data["last_updated"]}
             top_gainers = data["top_gainers"]
             top_losers = data["top_losers"]
             most_actively_traded = data["most_actively_traded"]
 
-            # Store decomposed data in ChromaDB
             ticker_collection.add(
                 ids=["metadata"],
                 metadatas=[metadata],
@@ -157,15 +147,11 @@ def load_ticker_trends_data():
         st.error(f"Unexpected error: {e}")
 
 def retrieve_ticker_trends_data():
-    # Access the collection
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
     st.write("Select the category of data to retrieve:")
-    data_type = st.radio(
-        "Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"]
-    )
+    data_type = st.radio("Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"])
 
-    # Map data types to IDs
     data_id_mapping = {
         "Metadata": "metadata",
         "Top Gainers": "top_gainers",
@@ -173,23 +159,92 @@ def retrieve_ticker_trends_data():
         "Most Actively Traded": "most_actively_traded",
     }
 
-    # Retrieve and display the selected data type
     if st.button("Retrieve Data"):
         try:
             results = ticker_collection.get(ids=[data_id_mapping[data_type]])
             if results["documents"]:
-                for document, metadata in zip(
-                    results["documents"], results["metadatas"]
-                ):
+                for document, metadata in zip(results["documents"], results["metadatas"]):
                     st.write(f"### {data_type}")
                     if data_type == "Metadata":
                         st.json(metadata)
                     else:
-                        st.json(json.loads(document))  # Parse stored JSON
+                        st.json(json.loads(document))
             else:
                 st.warning("No data found.")
         except Exception as e:
             st.error(f"Error retrieving data: {e}")
+
+# Define CrewAI Agents
+company_analyst_agent = Agent(
+    role="Company Analyst",
+    goal="Analyze news sentiment data to extract company-specific insights.",
+    tools=[ChromaDBTool(collection_name="news_sentiment_data")],
+    llm=ChatCompletion(api_key=openai_api_key)
+)
+
+market_trends_agent = Agent(
+    role="Market Trends Analyst",
+    goal="Identify market trends from ticker data.",
+    tools=[ChromaDBTool(collection_name="ticker_trends_data")],
+    llm=ChatCompletion(api_key=openai_api_key)
+)
+
+risk_management_agent = Agent(
+    role="Risk Manager",
+    goal="Assess market risks using insights from company analysis and market trends.",
+    tools=[
+        ChromaDBTool(collection_name="news_sentiment_data"),
+        ChromaDBTool(collection_name="ticker_trends_data")
+    ],
+    llm=ChatCompletion(api_key=openai_api_key)
+)
+
+newsletter_agent = Agent(
+    role="Newsletter Editor",
+    goal="Compile insights into a well-formatted financial newsletter.",
+    llm=ChatCompletion(api_key=openai_api_key)
+)
+
+# Define CrewAI Tasks
+company_analysis_task = Task(
+    description="Analyze news sentiment data to extract insights on companies.",
+    agent=company_analyst_agent
+)
+
+market_trends_task = Task(
+    description="Analyze ticker data to identify market trends.",
+    agent=market_trends_agent
+)
+
+risk_assessment_task = Task(
+    description="Assess market risks based on company insights and market trends.",
+    agent=risk_management_agent,
+    context=[company_analysis_task, market_trends_task]
+)
+
+newsletter_compilation_task = Task(
+    description="Compile all insights into a financial newsletter.",
+    agent=newsletter_agent,
+    context=[company_analysis_task, market_trends_task, risk_assessment_task]
+)
+
+# Assemble the Crew
+financial_insights_crew = Crew(
+    agents=[
+        company_analyst_agent,
+        market_trends_agent,
+        risk_management_agent,
+        newsletter_agent
+    ],
+    tasks=[
+        company_analysis_task,
+        market_trends_task,
+        risk_assessment_task,
+        newsletter_compilation_task
+    ],
+    process=Process.sequential,
+    verbose=True
+)
 
 # Main Logic
 if option == "Load News Data":
@@ -200,3 +255,8 @@ elif option == "Load Ticker Trends Data":
     load_ticker_trends_data()
 elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
+elif option == "Generate Newsletter":
+    st.subheader("Generating Financial Newsletter")
+    financial_insights_crew.kickoff()
+    st.write("### Newsletter Output")
+    st.text(newsletter_compilation_task.output)

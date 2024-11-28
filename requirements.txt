@@ -4,4 +4,5 @@ requests
 pysqlite3-binary
 protobuf==3.20
 chromadb
-
+crewai
+crewai-tools
