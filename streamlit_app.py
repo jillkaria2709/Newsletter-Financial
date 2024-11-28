@@ -2,13 +2,14 @@ import streamlit as st
 import requests
 import json
 __import__('pysqlite3')
-import sys,os
+import sys, os
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from crewai import Agent, Task, Crew, Process
 from chromadb import PersistentClient
+from crewai import Agent, Task, Crew, Process
 import openai
 
+# Custom ChromaDB Tool
 class ChromaDBTool:
     def __init__(self, collection_name):
         self.client = PersistentClient()
@@ -24,8 +25,8 @@ class ChromaDBTool:
 alpha_vantage_api_key = st.secrets["api_keys"]["alpha_vantage"]
 openai_api_key = st.secrets["api_keys"]["openai"]
 
-# Initialize ChromaDB Persistent Client
-client = chromadb.PersistentClient()
+# Set OpenAI API key globally
+openai.api_key = openai_api_key
 
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_api_key}&limit=50'
@@ -41,10 +42,9 @@ option = st.sidebar.radio(
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
 
-### Function to Load News Data into ChromaDB ###
+# Function to Load News Data into ChromaDB
 def load_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-
+    news_collection = PersistentClient().get_or_create_collection("news_sentiment_data")
     try:
         response = requests.get(news_url)
         response.raise_for_status()
@@ -87,7 +87,6 @@ def load_news_data():
                     }],
                     documents=[json.dumps(document)]
                 )
-
             st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
         else:
             st.error("No news data found.")
@@ -96,10 +95,9 @@ def load_news_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve News Data from ChromaDB ###
+# Function to Retrieve News Data from ChromaDB
 def retrieve_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-
+    news_collection = PersistentClient().get_or_create_collection("news_sentiment_data")
     doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
 
     if st.button("Retrieve News"):
@@ -115,10 +113,9 @@ def retrieve_news_data():
         except Exception as e:
             st.error(f"Error retrieving news data: {e}")
 
-### Function to Load Ticker Trends Data into ChromaDB ###
+# Function to Load Ticker Trends Data into ChromaDB
 def load_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
+    ticker_collection = PersistentClient().get_or_create_collection("ticker_trends_data")
     try:
         response = requests.get(tickers_url)
         response.raise_for_status()
@@ -150,7 +147,6 @@ def load_ticker_trends_data():
                 metadatas=[{"type": "most_actively_traded"}],
                 documents=[json.dumps(most_actively_traded)],
             )
-
             st.success("Ticker trends data added to ChromaDB.")
         else:
             st.error("Invalid data format received from API.")
@@ -159,9 +155,9 @@ def load_ticker_trends_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
+# Function to Retrieve Ticker Trends Data from ChromaDB
 def retrieve_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
+    ticker_collection = PersistentClient().get_or_create_collection("ticker_trends_data")
     st.write("Select the category of data to retrieve:")
     data_type = st.radio("Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"])
 
@@ -192,14 +188,14 @@ company_analyst_agent = Agent(
     role="Company Analyst",
     goal="Analyze news sentiment data to extract company-specific insights.",
     tools=[ChromaDBTool(collection_name="news_sentiment_data")],
-    llm=openai.chat.completions.create(api_key=openai_api_key)
+    llm=openai.chat.completions
 )
 
 market_trends_agent = Agent(
     role="Market Trends Analyst",
     goal="Identify market trends from ticker data.",
     tools=[ChromaDBTool(collection_name="ticker_trends_data")],
-    llm=openai.chat.completions.create(api_key=openai_api_key)
+    llm=openai.chat.completions
 )
 
 risk_management_agent = Agent(
@@ -209,13 +205,13 @@ risk_management_agent = Agent(
         ChromaDBTool(collection_name="news_sentiment_data"),
         ChromaDBTool(collection_name="ticker_trends_data")
     ],
-    llm=openai.chat.completions.create(api_key=openai_api_key)
+    llm=openai.chat.completions
 )
 
 newsletter_agent = Agent(
     role="Newsletter Editor",
     goal="Compile insights into a well-formatted financial newsletter.",
-    llm=openai.chat.completions.create(api_key=openai_api_key)
+    llm=openai.chat.completions
 )
 
 # Define CrewAI Tasks
