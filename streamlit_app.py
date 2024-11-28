@@ -142,7 +142,7 @@ def batch_process(content_list, batch_size=5):
     for i in range(0, len(content_list), batch_size):
         yield content_list[i:i + batch_size]
 
-def generate_newsletter_with_batches():
+def generate_newsletter():
     try:
         # Query news collection
         news_results = news_collection.query(query_texts=[""], n_results=1000)
