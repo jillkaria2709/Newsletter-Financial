@@ -143,6 +143,99 @@ def generate_newsletter():
         if not news_results or "documents" not in news_results:
             st.error("No news data found.")
             return
+def generate_newsletter():
+    try:
+        # Query and process news collection - Limit to Top 5
+        news_results = news_collection.query(query_texts=[""], n_results=5)
+
+        if not news_results or "documents" not in news_results:
+            st.error("No news data found.")
+            return
+
+        # Process news results
+        raw_news_content = "\n".join(
+            [
+                f"{json.loads(doc).get('title', 'No Title')}: {json.loads(doc).get('summary', 'No Summary')}\n"
+                f"Source: {json.loads(doc).get('source', 'Unknown')}\n"
+                f"Published: {json.loads(doc).get('time_published', 'Unknown')}\n"
+                f"Sentiment: {json.loads(doc).get('overall_sentiment_label', 'Unknown')} "
+                f"(Score: {json.loads(doc).get('overall_sentiment_score', 'N/A')})\n"
+                f"Topics: {', '.join(json.loads(doc).get('topics', [])) if isinstance(json.loads(doc).get('topics', []), list) else 'N/A'}"
+                for doc in news_results["documents"]
+            ]
+        )
+
+        summarized_news = summarize_content(
+            raw_news_content,
+            "Summarize the following top 5 news items for a financial newsletter:"
+        )
+
+        # Retrieve and process ticker trends data
+        gainers_results = ticker_collection.get(ids=["top_gainers"])
+        losers_results = ticker_collection.get(ids=["top_losers"])
+
+        if not gainers_results or "documents" not in gainers_results or not gainers_results["documents"]:
+            st.error("No gainers data found.")
+            return
+        if not losers_results or "documents" not in losers_results or not losers_results["documents"]:
+            st.error("No losers data found.")
+            return
+
+        # Parse gainers and losers data
+        gainers_data = json.loads(gainers_results["documents"][0])  # Top Gainers
+        losers_data = json.loads(losers_results["documents"][0])  # Top Losers
+
+        # Ensure gainers_data and losers_data are lists
+        if not isinstance(gainers_data, list) or not isinstance(losers_data, list):
+            st.error("Ticker data format is incorrect.")
+            return
+
+        # Take any top 5 gainers and losers
+        top_5_gainers = gainers_data[:5]
+        top_5_losers = losers_data[:5]
+
+        # Prepare summarized gainers and losers data
+        gainers_content = "\n".join(
+            [
+                f"Gainer: {gainer.get('ticker', 'Unknown')} - Price: {gainer.get('price', 'N/A')} "
+                f"(Change: {gainer.get('change_amount', 'N/A')}, Volume: {gainer.get('volume', 'N/A')})"
+                for gainer in top_5_gainers
+            ]
+        )
+        losers_content = "\n".join(
+            [
+                f"Loser: {loser.get('ticker', 'Unknown')} - Price: {loser.get('price', 'N/A')} "
+                f"(Change: {loser.get('change_amount', 'N/A')}, Volume: {loser.get('volume', 'N/A')})"
+                for loser in top_5_losers
+            ]
+        )
+
+        # Combine and summarize tickers data
+        raw_ticker_content = f"Top Gainers:\n{gainers_content}\n\nTop Losers:\n{losers_content}"
+        summarized_tickers = summarize_content(
+            raw_ticker_content,
+            "Summarize the following ticker trends content for a financial newsletter:"
+        )
+
+        # Combine summarized data for the newsletter
+        combined_data = f"News Summaries:\n{summarized_news}\n\nTicker Trends:\n{summarized_tickers}"
+
+        # Generate the final newsletter
+        response = openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a financial newsletter editor."},
+                {"role": "user", "content": f"Generate a newsletter using the following summarized data:\n{combined_data}"}
+            ]
+        )
+        newsletter = response.choices[0].message.content
+
+        # Display the newsletter
+        st.subheader("Generated Newsletter")
+        st.write(newsletter)
+
+    except Exception as e:
+        st.error(f"Error generating newsletter: {e}")
 
         # Process news results
         raw_news_content = "\n".join(
