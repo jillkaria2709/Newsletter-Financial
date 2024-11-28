@@ -4,14 +4,14 @@ import json
 import chromadb
 from chromadb.config import Settings
 from crewai import Agent, Task, Crew, Process
-from openai import ChatCompletion
+from openai import OpenAI
 
-# Initialize ChromaDB Persistent Client
+# Initialize OpenAI and ChromaDB Clients
+openai_client = OpenAI(api_key=st.secrets["api_keys"]["openai"])
 client = chromadb.PersistentClient()
 
 # API key and URLs for Alpha Vantage
 api_key = st.secrets["api_keys"]["alpha_vantage"]
-openai_api_key = st.secrets["api_keys"]["openai"]
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={api_key}'
 
@@ -163,21 +163,30 @@ company_analyst_agent = Agent(
     role="Company Analyst",
     goal="Analyze news sentiment data to provide insights.",
     tools=[],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=lambda query: openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": query}]
+    )["choices"][0]["message"]["content"]
 )
 
 market_trends_agent = Agent(
     role="Market Trends Analyst",
     goal="Analyze ticker trends to provide market insights.",
     tools=[],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=lambda query: openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": query}]
+    )["choices"][0]["message"]["content"]
 )
 
 newsletter_agent = Agent(
     role="Newsletter Editor",
     goal="Compile a financial newsletter using all insights.",
     tools=[],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=lambda query: openai_client.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": query}]
+    )["choices"][0]["message"]["content"]
 )
 
 ### Main Logic ###
@@ -191,4 +200,4 @@ elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
     st.subheader("Generating Financial Newsletter...")
-    st.write("Feature under development.")
+    st.write("Newsletter feature under construction.")
