@@ -6,8 +6,8 @@ import sys,os
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from crewai import Agent, Task, Crew, Process
-from openai import ChatCompletion
 from chromadb import PersistentClient
+import openai
 
 class ChromaDBTool:
     def __init__(self, collection_name):
@@ -192,14 +192,14 @@ company_analyst_agent = Agent(
     role="Company Analyst",
     goal="Analyze news sentiment data to extract company-specific insights.",
     tools=[ChromaDBTool(collection_name="news_sentiment_data")],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=openai.chat.completions.create(api_key=openai_api_key)
 )
 
 market_trends_agent = Agent(
     role="Market Trends Analyst",
     goal="Identify market trends from ticker data.",
     tools=[ChromaDBTool(collection_name="ticker_trends_data")],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=openai.chat.completions.create(api_key=openai_api_key)
 )
 
 risk_management_agent = Agent(
@@ -209,13 +209,13 @@ risk_management_agent = Agent(
         ChromaDBTool(collection_name="news_sentiment_data"),
         ChromaDBTool(collection_name="ticker_trends_data")
     ],
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=openai.chat.completions.create(api_key=openai_api_key)
 )
 
 newsletter_agent = Agent(
     role="Newsletter Editor",
     goal="Compile insights into a well-formatted financial newsletter.",
-    llm=ChatCompletion(api_key=openai_api_key)
+    llm=openai.chat.completions.create(api_key=openai_api_key)
 )
 
 # Define CrewAI Tasks
