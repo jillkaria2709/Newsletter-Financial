@@ -7,7 +7,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb.config import Settings
 from crewai import Agent
-from crewai_tools.tools.rag_tool import RagTool
+from crewai_tools.rag_tool import RagTool
 from openai import OpenAI
 
 # Initialize OpenAI and ChromaDB Clients
