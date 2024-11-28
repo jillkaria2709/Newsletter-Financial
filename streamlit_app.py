@@ -218,7 +218,7 @@ def generate_newsletter():
 
         # Generate the final newsletter
         response = openai_client.chat.completions.create(
-            model="gpt-4o-min",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a financial newsletter editor."},
                 {"role": "user", "content": f"Generate a newsletter using the following summarized data:\n{combined_data}"}
