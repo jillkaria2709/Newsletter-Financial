@@ -152,16 +152,16 @@ def generate_newsletter():
             st.error("No news data found.")
             return
 
+        # Process news results
         raw_news_content = "\n".join(
             [
-                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
+                f"{doc['title']}: {doc.get('summary', 'No Summary')}\n"
                 f"Source: {doc.get('source', 'Unknown')}\n"
                 f"Published: {doc.get('time_published', 'Unknown')}\n"
                 f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
                 f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
                 f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
-                if isinstance(doc, dict) else
-                f"Unstructured Document: {doc}"
+                if isinstance(doc, dict) else f"Unstructured Document: {doc}"
                 for doc in news_results["documents"]
             ]
         )
@@ -182,12 +182,12 @@ def generate_newsletter():
         gainers = [
             json.loads(doc) if isinstance(doc, str) else doc
             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
-            if meta.get("type") == "top_gainers"
+            if isinstance(meta, dict) and meta.get("type") == "top_gainers"
         ]
         losers = [
             json.loads(doc) if isinstance(doc, str) else doc
             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
-            if meta.get("type") == "top_losers"
+            if isinstance(meta, dict) and meta.get("type") == "top_losers"
         ]
 
         # Sort and take top 5 by change_percentage
@@ -239,6 +239,23 @@ def generate_newsletter():
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
+
+def summarize_content(content, role_description="Summarize the following content:"):
+    """
+    Summarize a given content string using OpenAI.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful summarizer."},
+                {"role": "user", "content": f"{role_description}\n{content}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error during summarization: {e}")
+        return "Error during summarization."
 
 def summarize_content(content, role_description="Summarize the following content:"):
     """
