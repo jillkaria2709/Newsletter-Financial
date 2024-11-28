@@ -161,6 +161,7 @@ def retrieve_ticker_trends_data():
 ### CrewAI Agents ###
 company_analyst_agent = Agent(
     role="Company Analyst",
+    backstory="An experienced financial analyst focusing on company news sentiment analysis.",
     goal="Analyze news sentiment data to provide insights.",
     tools=[],
     llm=lambda query: openai_client.chat.completions.create(
@@ -171,6 +172,7 @@ company_analyst_agent = Agent(
 
 market_trends_agent = Agent(
     role="Market Trends Analyst",
+    backstory="A financial analyst specializing in market trends and ticker insights.",
     goal="Analyze ticker trends to provide market insights.",
     tools=[],
     llm=lambda query: openai_client.chat.completions.create(
@@ -181,6 +183,7 @@ market_trends_agent = Agent(
 
 newsletter_agent = Agent(
     role="Newsletter Editor",
+    backstory="A skilled financial writer with a knack for summarizing complex information.",
     goal="Compile a financial newsletter using all insights.",
     tools=[],
     llm=lambda query: openai_client.chat.completions.create(
