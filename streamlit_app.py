@@ -135,25 +135,26 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
 
+
 def generate_newsletter():
     try:
         # Query and process news collection - Limit to Top 5
         news_results = news_collection.query(query_texts=[""], n_results=5)
 
-        if not news_results or "documents" not in news_results:
+        if not news_results or "documents" not in news_results or not news_results["documents"]:
             st.error("No news data found.")
             return
 
         # Process news results
         raw_news_content = "\n".join(
             [
-                f"{json.loads(doc).get('title', 'No Title')}: {json.loads(doc).get('summary', 'No Summary')}\n"
-                f"Source: {json.loads(doc).get('source', 'Unknown')}\n"
-                f"Published: {json.loads(doc).get('time_published', 'Unknown')}\n"
-                f"Sentiment: {json.loads(doc).get('overall_sentiment_label', 'Unknown')} "
-                f"(Score: {json.loads(doc).get('overall_sentiment_score', 'N/A')})\n"
-                f"Topics: {', '.join(json.loads(doc).get('topics', [])) if isinstance(json.loads(doc).get('topics', []), list) else 'N/A'}"
-                for doc in news_results["documents"]
+                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
+                f"Source: {doc.get('source', 'Unknown')}\n"
+                f"Published: {doc.get('time_published', 'Unknown')}\n"
+                f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
+                f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
+                f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
+                for doc in [json.loads(d) for d in news_results["documents"]]  # Ensure each document is parsed
             ]
         )
 
@@ -174,12 +175,15 @@ def generate_newsletter():
             return
 
         # Parse gainers and losers data
-        gainers_data = json.loads(gainers_results["documents"][0])  # Top Gainers
-        losers_data = json.loads(losers_results["documents"][0])  # Top Losers
+        gainers_data = json.loads(gainers_results["documents"][0])  # Ensure parsed correctly
+        losers_data = json.loads(losers_results["documents"][0])  # Ensure parsed correctly
 
         # Ensure gainers_data and losers_data are lists
-        if not isinstance(gainers_data, list) or not isinstance(losers_data, list):
-            st.error("Ticker data format is incorrect.")
+        if not isinstance(gainers_data, list):
+            st.error("Gainers data is not a list.")
+            return
+        if not isinstance(losers_data, list):
+            st.error("Losers data is not a list.")
             return
 
         # Take any top 5 gainers and losers
@@ -228,6 +232,7 @@ def generate_newsletter():
 
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
+
 
 def summarize_content(content, role_description="Summarize the following content:"):
     """
