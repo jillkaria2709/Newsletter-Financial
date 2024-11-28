@@ -170,7 +170,7 @@ def generate_newsletter():
             st.error("No ticker data found.")
             return
 
-        # Process gainers and losers using RAG
+        # Extract gainers and losers
         gainers = [
             json.loads(doc) if isinstance(doc, str) else doc
             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
@@ -182,30 +182,22 @@ def generate_newsletter():
             if isinstance(meta, dict) and meta.get("type") == "top_losers"
         ]
 
-        # Sort and take top 5 by change_percentage
-        top_5_gainers = sorted(
-            gainers,
-            key=lambda x: float(x.get("change_percentage", "0").replace("%", "")),
-            reverse=True
-        )[:5]
-        top_5_losers = sorted(
-            losers,
-            key=lambda x: float(x.get("change_percentage", "0").replace("%", "")),
-            reverse=True
-        )[:5]
+        # Take any top 5 gainers and losers
+        top_5_gainers = gainers[:5]
+        top_5_losers = losers[:5]
 
         # Prepare summarized gainers and losers data
         gainers_content = "\n".join(
             [
-                f"Gainer: {gainer.get('ticker', 'Unknown')} - Change: {gainer.get('change_percentage', 'N/A')} "
-                f"(Price: {gainer.get('price', 'N/A')}, Volume: {gainer.get('volume', 'N/A')})"
+                f"Gainer: {gainer.get('ticker', 'Unknown')} - Price: {gainer.get('price', 'N/A')} "
+                f"(Change: {gainer.get('change_amount', 'N/A')}, Volume: {gainer.get('volume', 'N/A')})"
                 for gainer in top_5_gainers
             ]
         )
         losers_content = "\n".join(
             [
-                f"Loser: {loser.get('ticker', 'Unknown')} - Change: {loser.get('change_percentage', 'N/A')} "
-                f"(Price: {loser.get('price', 'N/A')}, Volume: {loser.get('volume', 'N/A')})"
+                f"Loser: {loser.get('ticker', 'Unknown')} - Price: {loser.get('price', 'N/A')} "
+                f"(Change: {loser.get('change_amount', 'N/A')}, Volume: {loser.get('volume', 'N/A')})"
                 for loser in top_5_losers
             ]
         )
