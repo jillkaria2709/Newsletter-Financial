@@ -6,8 +6,19 @@ import sys,os
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from crewai import Agent, Task, Crew, Process
-from crewai_tools import ChromaDBTool
 from openai import ChatCompletion
+from chromadb.api import PersistentClient
+
+class ChromaDBTool:
+    def __init__(self, collection_name):
+        self.client = PersistentClient()
+        self.collection = self.client.get_or_create_collection(collection_name)
+    
+    def query(self, query_text, n_results=5):
+        return self.collection.query(query_text=query_text, n_results=n_results)
+    
+    def add(self, ids, metadatas, documents):
+        self.collection.add(ids=ids, metadatas=metadatas, documents=documents)
 
 # Access API keys from Streamlit secrets
 alpha_vantage_api_key = st.secrets["api_keys"]["alpha_vantage"]
