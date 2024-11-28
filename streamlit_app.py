@@ -218,7 +218,7 @@ def generate_newsletter():
 
         # Generate the final newsletter
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-min",
             messages=[
                 {"role": "system", "content": "You are a financial newsletter editor."},
                 {"role": "user", "content": f"Generate a newsletter using the following summarized data:\n{combined_data}"}
@@ -239,7 +239,7 @@ def summarize_content(content, role_description="Summarize the following content
     """
     try:
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a helpful summarizer."},
                 {"role": "user", "content": f"{role_description}\n{content}"}
