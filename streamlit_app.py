@@ -135,62 +135,48 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
 
-def generate_newsletter():
+def batch_process(content_list, batch_size=5):
+    """
+    Break a list of content into smaller batches.
+    """
+    for i in range(0, len(content_list), batch_size):
+        yield content_list[i:i + batch_size]
+
+def generate_newsletter_with_batches():
     try:
         # Query news collection
-        news_results = news_collection.query(
-            query_texts=[""],
-            n_results=1000
-        )
+        news_results = news_collection.query(query_texts=[""], n_results=1000)
+        ticker_results = ticker_collection.query(query_texts=[""], n_results=1000)
 
-        # Process news data
-        news_content = "\n".join(
-            [
-                # Parse document if it's a string
-                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
-                f"Source: {doc.get('source', 'Unknown')}\n"
-                f"Published: {doc.get('time_published', 'Unknown')}\n"
-                f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
-                f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
-                f"Topics: {', '.join(doc.get('topics', []))}"
-                if isinstance(doc, dict) else
-                f"Unstructured Document: {doc}"
-                for doc in news_results["documents"]
-            ]
-        )
+        # Combine and batch process
+        all_content = news_results["documents"] + ticker_results["documents"]
+        batches = list(batch_process(all_content, batch_size=50))
 
-        # Query ticker trends collection
-        ticker_results = ticker_collection.query(
-            query_texts=[""],
-            n_results=1000
-        )
+        newsletter_parts = []
+        for batch in batches:
+            batch_content = "\n".join(
+                [
+                    f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}"
+                    if isinstance(doc, dict) else str(doc)
+                    for doc in batch
+                ]
+            )
 
-        # Process ticker data
-        ticker_content = "\n".join(
-            [
-                f"{meta.get('type', 'Unknown Type')}: {doc}"
-                if isinstance(doc, dict) else
-                f"Unstructured Document: {doc}"
-                for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
-            ]
-        )
+            response = openai_client.chat.completions.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a financial newsletter editor."},
+                    {"role": "user", "content": f"Generate a newsletter using the following batch:\n{batch_content}"}
+                ]
+            )
+            newsletter_parts.append(response["choices"][0]["message"]["content"])
 
-        # Combine data for OpenAI
-        combined_data = f"News Summaries:\n{news_content}\n\nTicker Trends:\n{ticker_content}"
-
-        # Generate newsletter using OpenAI
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a financial newsletter editor."},
-                {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_data}"}
-            ]
-        )
-        newsletter = response["choices"][0]["message"]["content"]
+        # Combine parts into final newsletter
+        full_newsletter = "\n\n".join(newsletter_parts)
 
         # Display the newsletter
         st.subheader("Generated Newsletter")
-        st.write(newsletter)
+        st.write(full_newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
