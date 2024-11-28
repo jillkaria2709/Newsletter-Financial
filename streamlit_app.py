@@ -1,10 +1,8 @@
 import streamlit as st
 import requests
 import json
-__import__('pysqlite3')
-import sys,os
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
+from chromadb.config import Settings
 from openai import OpenAI
 
 # Initialize ChromaDB Persistent Client
@@ -19,9 +17,10 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 openai_client = OpenAI(api_key=st.secrets["api_keys"]["openai"])
 
 # Streamlit App Title
-st.title("Financial Insights Newsletter Generator")
+st.title("Alpha Vantage RAG System")
 
 # Sidebar options
+st.sidebar.header("Options")
 option = st.sidebar.radio(
     "Choose an action:",
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
@@ -39,25 +38,53 @@ def load_news_data():
         data = response.json()
 
         if 'feed' in data:
-            for i, item in enumerate(data['feed']):
-                content = item.get("summary", item["title"])
-                metadata = {
+            for i, item in enumerate(data['feed'], start=1):
+                document = {
+                    "id": str(i),
                     "title": item["title"],
-                    "source": item["source"],
+                    "url": item["url"],
                     "time_published": item["time_published"],
-                    "overall_sentiment": item.get("overall_sentiment_label", "Neutral")
+                    "source": item["source"],
+                    "summary": item.get("summary", "N/A"),
+                    "topics": [topic["topic"] for topic in item.get("topics", [])],
+                    "overall_sentiment_label": item.get("overall_sentiment_label", "N/A"),
+                    "overall_sentiment_score": item.get("overall_sentiment_score", "N/A")
                 }
+
                 # Add to ChromaDB
                 news_collection.add(
-                    ids=[str(i)],
-                    documents=[content],
-                    metadatas=[metadata]
+                    ids=[document["id"]],
+                    metadatas=[{
+                        "title": document["title"],
+                        "source": document["source"],
+                        "time_published": document["time_published"],
+                        "overall_sentiment": document["overall_sentiment_label"]
+                    }],
+                    documents=[json.dumps(document)]
                 )
+
             st.success(f"Loaded {len(data['feed'])} news items into ChromaDB.")
         else:
             st.error("No news data found.")
     except Exception as e:
         st.error(f"Error loading news data: {e}")
+
+### Function to Retrieve News Data from ChromaDB ###
+def retrieve_news_data():
+    doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
+
+    if st.button("Retrieve News"):
+        try:
+            results = news_collection.get(ids=[doc_id])
+            if results['documents']:
+                for document, metadata in zip(results['documents'], results['metadatas']):
+                    parsed_document = json.loads(document)
+                    st.write("### News Data")
+                    st.json(parsed_document)
+            else:
+                st.warning("No data found for the given News ID.")
+        except Exception as e:
+            st.error(f"Error retrieving news data: {e}")
 
 ### Function to Load Ticker Trends Data into ChromaDB ###
 def load_ticker_trends_data():
@@ -83,43 +110,62 @@ def load_ticker_trends_data():
     except Exception as e:
         st.error(f"Error loading ticker trends data: {e}")
 
-### Function to Query Data from ChromaDB ###
-def query_chromadb(collection, query_text):
-    try:
-        results = collection.query(
-            query_text=query_text,
-            n_results=5
-        )
-        return results["documents"], results["metadatas"]
-    except Exception as e:
-        st.error(f"Error querying data: {e}")
-        return [], []
+### Function to Retrieve Ticker Trends Data ###
+def retrieve_ticker_trends_data():
+    data_type = st.radio(
+        "Data Type", ["Top Gainers", "Top Losers"]
+    )
+
+    data_id_mapping = {
+        "Top Gainers": "top_gainers",
+        "Top Losers": "top_losers"
+    }
+
+    if st.button("Retrieve Ticker Trends Data"):
+        try:
+            results = ticker_collection.get(ids=[data_id_mapping[data_type]])
+            if results["documents"]:
+                for document, metadata in zip(results["documents"], results["metadatas"]):
+                    st.write(f"### {metadata['type']}")
+                    st.json(json.loads(document))
+            else:
+                st.warning("No data found.")
+        except Exception as e:
+            st.error(f"Error retrieving ticker trends data: {e}")
 
 ### Function to Generate Newsletter ###
 def generate_newsletter():
     try:
-        # Query News Data
-        news_query = "Latest financial news"
-        news_docs, news_metadata = query_chromadb(news_collection, news_query)
+        # Retrieve all documents from the news collection
+        news_results = news_collection.get(
+            ids=news_collection.list_ids()
+        )  # Get all IDs from the news collection
+        news_content = "\n".join(
+            [f"{json.loads(doc)['title']}: {json.loads(doc)['summary']}" for doc in news_results["documents"]]
+        )
 
-        # Query Ticker Trends Data
-        ticker_query = "Top market gainers and losers"
-        ticker_docs, ticker_metadata = query_chromadb(ticker_collection, ticker_query)
+        # Retrieve all documents from the ticker trends collection
+        ticker_results = ticker_collection.get(
+            ids=ticker_collection.list_ids()
+        )  # Get all IDs from the ticker trends collection
+        ticker_content = "\n".join(
+            [f"{meta['type']}: {doc}" for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])]
+        )
 
-        # Combine Data for OpenAI
-        combined_context = f"News Data: {news_docs}\nTicker Data: {ticker_docs}"
-        
-        # Generate Newsletter using OpenAI
+        # Combine data for OpenAI
+        combined_data = f"News Summaries:\n{news_content}\n\nTicker Trends:\n{ticker_content}"
+
+        # Generate newsletter using OpenAI
         response = openai_client.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a financial newsletter editor."},
-                {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_context}"}
+                {"role": "user", "content": f"Generate a newsletter using the following data:\n{combined_data}"}
             ]
         )
         newsletter = response["choices"][0]["message"]["content"]
 
-        # Display the Newsletter
+        # Display the newsletter
         st.subheader("Generated Newsletter")
         st.write(newsletter)
     except Exception as e:
@@ -129,23 +175,10 @@ def generate_newsletter():
 if option == "Load News Data":
     load_news_data()
 elif option == "Retrieve News Data":
-    query = st.text_input("Enter your query for news data:")
-    if st.button("Search News"):
-        docs, metadatas = query_chromadb(news_collection, query)
-        for doc, meta in zip(docs, metadatas):
-            st.write(f"Title: {meta['title']}")
-            st.write(f"Source: {meta['source']}")
-            st.write(f"Content: {doc}")
-            st.write("---")
+    retrieve_news_data()
 elif option == "Load Ticker Trends Data":
     load_ticker_trends_data()
 elif option == "Retrieve Ticker Trends Data":
-    query = st.text_input("Enter your query for ticker trends:")
-    if st.button("Search Ticker Trends"):
-        docs, metadatas = query_chromadb(ticker_collection, query)
-        for doc, meta in zip(docs, metadatas):
-            st.write(f"Type: {meta['type']}")
-            st.write(f"Content: {doc}")
-            st.write("---")
+    retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
     generate_newsletter()
