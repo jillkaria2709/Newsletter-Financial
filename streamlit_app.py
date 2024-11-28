@@ -1,9 +1,6 @@
 import streamlit as st
 import requests
 import json
-__import__('pysqlite3')
-import sys, os
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb import PersistentClient
 from crewai import Agent, Task, Crew, Process
@@ -113,105 +110,51 @@ def retrieve_news_data():
         except Exception as e:
             st.error(f"Error retrieving news data: {e}")
 
-# Function to Load Ticker Trends Data into ChromaDB
-def load_ticker_trends_data():
-    ticker_collection = PersistentClient().get_or_create_collection("ticker_trends_data")
-    try:
-        response = requests.get(tickers_url)
-        response.raise_for_status()
-        data = response.json()
-
-        if "metadata" in data and "top_gainers" in data:
-            metadata = {"metadata": data["metadata"], "last_updated": data["last_updated"]}
-            top_gainers = data["top_gainers"]
-            top_losers = data["top_losers"]
-            most_actively_traded = data["most_actively_traded"]
-
-            ticker_collection.add(
-                ids=["metadata"],
-                metadatas=[metadata],
-                documents=["Ticker Trends Metadata"],
-            )
-            ticker_collection.add(
-                ids=["top_gainers"],
-                metadatas=[{"type": "top_gainers"}],
-                documents=[json.dumps(top_gainers)],
-            )
-            ticker_collection.add(
-                ids=["top_losers"],
-                metadatas=[{"type": "top_losers"}],
-                documents=[json.dumps(top_losers)],
-            )
-            ticker_collection.add(
-                ids=["most_actively_traded"],
-                metadatas=[{"type": "most_actively_traded"}],
-                documents=[json.dumps(most_actively_traded)],
-            )
-            st.success("Ticker trends data added to ChromaDB.")
-        else:
-            st.error("Invalid data format received from API.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed: {e}")
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
-
-# Function to Retrieve Ticker Trends Data from ChromaDB
-def retrieve_ticker_trends_data():
-    ticker_collection = PersistentClient().get_or_create_collection("ticker_trends_data")
-    st.write("Select the category of data to retrieve:")
-    data_type = st.radio("Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"])
-
-    data_id_mapping = {
-        "Metadata": "metadata",
-        "Top Gainers": "top_gainers",
-        "Top Losers": "top_losers",
-        "Most Actively Traded": "most_actively_traded",
-    }
-
-    if st.button("Retrieve Data"):
-        try:
-            results = ticker_collection.get(ids=[data_id_mapping[data_type]])
-            if results["documents"]:
-                for document, metadata in zip(results["documents"], results["metadatas"]):
-                    st.write(f"### {data_type}")
-                    if data_type == "Metadata":
-                        st.json(metadata)
-                    else:
-                        st.json(json.loads(document))
-            else:
-                st.warning("No data found.")
-        except Exception as e:
-            st.error(f"Error retrieving data: {e}")
-
 # Define CrewAI Agents
 company_analyst_agent = Agent(
     role="Company Analyst",
     goal="Analyze news sentiment data to extract company-specific insights.",
+    backstory="An experienced analyst in financial news.",
     tools=[ChromaDBTool(collection_name="news_sentiment_data")],
-    llm=openai.chat.completions
+    llm=lambda prompt: openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )["choices"][0]["message"]["content"]
 )
 
 market_trends_agent = Agent(
     role="Market Trends Analyst",
     goal="Identify market trends from ticker data.",
+    backstory="Specializes in market trends and financial performance.",
     tools=[ChromaDBTool(collection_name="ticker_trends_data")],
-    llm=openai.chat.completions
+    llm=lambda prompt: openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )["choices"][0]["message"]["content"]
 )
 
 risk_management_agent = Agent(
     role="Risk Manager",
     goal="Assess market risks using insights from company analysis and market trends.",
+    backstory="An expert in market risk assessment.",
     tools=[
         ChromaDBTool(collection_name="news_sentiment_data"),
         ChromaDBTool(collection_name="ticker_trends_data")
     ],
-    llm=openai.chat.completions
+    llm=lambda prompt: openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )["choices"][0]["message"]["content"]
 )
 
 newsletter_agent = Agent(
     role="Newsletter Editor",
     goal="Compile insights into a well-formatted financial newsletter.",
-    llm=openai.chat.completions
+    backstory="A skilled financial content creator.",
+    llm=lambda prompt: openai.chat.completions.create(
+        model="gpt-4",
+        messages=[{"role": "user", "content": prompt}]
+    )["choices"][0]["message"]["content"]
 )
 
 # Define CrewAI Tasks
@@ -260,10 +203,6 @@ if option == "Load News Data":
     load_news_data()
 elif option == "Retrieve News Data":
     retrieve_news_data()
-elif option == "Load Ticker Trends Data":
-    load_ticker_trends_data()
-elif option == "Retrieve Ticker Trends Data":
-    retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
     st.subheader("Generating Financial Newsletter")
     financial_insights_crew.kickoff()
