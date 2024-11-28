@@ -147,14 +147,13 @@ def generate_newsletter():
         # Process news results
         raw_news_content = "\n".join(
             [
-                f"{doc['title']}: {doc.get('summary', 'No Summary')}\n"
+                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
                 f"Source: {doc.get('source', 'Unknown')}\n"
                 f"Published: {doc.get('time_published', 'Unknown')}\n"
                 f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
                 f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
                 f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
-                if isinstance(doc, dict) else f"Unstructured Document: {doc}"
-                for doc in news_results["documents"]
+                for doc in json.loads(news_results["documents"][0])  # Assuming single document list
             ]
         )
 
@@ -163,46 +162,35 @@ def generate_newsletter():
             "Summarize the following top 5 news items for a financial newsletter:"
         )
 
-        # Query and process ticker trends collection
-        ticker_results = ticker_collection.query(query_texts=[""], n_results=1000)
+        # Retrieve ticker trends data
+        gainers_results = ticker_collection.get(ids=["top_gainers"])
+        losers_results = ticker_collection.get(ids=["top_losers"])
 
-        if not ticker_results or "documents" not in ticker_results or "metadatas" not in ticker_results:
-            st.error("No ticker data found.")
-            return
+        # Process gainers
+        if "documents" in gainers_results and gainers_results["documents"]:
+            gainers = json.loads(gainers_results["documents"][0])[:5]  # Take top 5 gainers
+        else:
+            gainers = []
 
-        # Extract gainers and losers
-        gainers = [
-            json.loads(doc) if isinstance(doc, str) else doc
-            for doc, meta in zip(ticker_results["gainers"], ticker_results["metadatas"])
-            if isinstance(meta, dict) and meta.get("type") == "top_gainers"
-        ]
-        losers = [
-            json.loads(doc) if isinstance(doc, str) else doc
-            for doc, meta in zip(ticker_results["losers"], ticker_results["metadatas"])
-            if isinstance(meta, dict) and meta.get("type") == "top_losers"
-        ]
-
-        # Debugging - Log the data to verify
-        st.write("Gainers Data:", gainers)
-        st.write("Losers Data:", losers)
-
-        # Take any top 5 gainers and losers
-        top_5_gainers = gainers[:5]
-        top_5_losers = losers[:5]
+        # Process losers
+        if "documents" in losers_results and losers_results["documents"]:
+            losers = json.loads(losers_results["documents"][0])[:5]  # Take top 5 losers
+        else:
+            losers = []
 
         # Prepare summarized gainers and losers data
         gainers_content = "\n".join(
             [
                 f"Gainer: {gainer.get('ticker', 'Unknown')} - Price: {gainer.get('price', 'N/A')} "
                 f"(Change: {gainer.get('change_amount', 'N/A')}, Volume: {gainer.get('volume', 'N/A')})"
-                for gainer in top_5_gainers
+                for gainer in gainers
             ]
         )
         losers_content = "\n".join(
             [
                 f"Loser: {loser.get('ticker', 'Unknown')} - Price: {loser.get('price', 'N/A')} "
                 f"(Change: {loser.get('change_amount', 'N/A')}, Volume: {loser.get('volume', 'N/A')})"
-                for loser in top_5_losers
+                for loser in losers
             ]
         )
 
@@ -229,6 +217,7 @@ def generate_newsletter():
         # Display the newsletter
         st.subheader("Generated Newsletter")
         st.write(newsletter)
+
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
