@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 __import__('pysqlite3')
-import sys,os
+import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from openai import OpenAI
@@ -135,7 +135,7 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
 
-
+### Function to Generate Newsletter ###
 def generate_newsletter():
     try:
         # Query and process news collection - Limit to Top 5
@@ -154,7 +154,7 @@ def generate_newsletter():
                 f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
                 f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
                 f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
-                for doc in [json.loads(d) for d in news_results["documents"]]  # Ensure each document is parsed
+                for doc in [json.loads(d) for d in news_results["documents"]]
             ]
         )
 
@@ -175,16 +175,8 @@ def generate_newsletter():
             return
 
         # Parse gainers and losers data
-        gainers_data = json.loads(gainers_results["documents"][0])  # Ensure parsed correctly
-        losers_data = json.loads(losers_results["documents"][0])  # Ensure parsed correctly
-
-        # Ensure gainers_data and losers_data are lists
-        if not isinstance(gainers_data, list):
-            st.error("Gainers data is not a list.")
-            return
-        if not isinstance(losers_data, list):
-            st.error("Losers data is not a list.")
-            return
+        gainers_data = json.loads(gainers_results["documents"][0])
+        losers_data = json.loads(losers_results["documents"][0])
 
         # Take any top 5 gainers and losers
         top_5_gainers = gainers_data[:5]
@@ -233,11 +225,8 @@ def generate_newsletter():
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
-
+### Function to Summarize Content ###
 def summarize_content(content, role_description="Summarize the following content:"):
-    """
-    Summarize a given content string using OpenAI.
-    """
     try:
         response = openai_client.chat.completions.create(
             model="gpt-4o-mini",
