@@ -1,33 +1,36 @@
 import streamlit as st
 import requests
 import json
-__import__('pysqlite3')
-import sys,os
-sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb.config import Settings
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
 
-# Replace 'YOUR_API_KEY' with your actual Alpha Vantage API key
+# API key for Alpha Vantage
 api_key = 'H329FP3SD3PO0M7H'
-url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
+
+# API URLs
+news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
+tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={api_key}'
 
 # Streamlit App Title
-st.title("News Sentiment RAG System")
+st.title("Alpha Vantage Data Manager")
 
 # Sidebar options
 st.sidebar.header("Options")
-option = st.sidebar.radio("Choose an action:", ["Load Data", "Retrieve Information"])
+option = st.sidebar.radio(
+    "Choose an action:", 
+    ["Load News Data", "Load Ticker Trends Data", "Retrieve Information"]
+)
 
-# Function to load data into ChromaDB
-def load_data():
-    # Create or access a collection in ChromaDB
-    collection = client.get_or_create_collection("news_sentiment_data")
+# Function to load news sentiment data into ChromaDB
+def load_news_data():
+    # Create or access a collection for news data
+    news_collection = client.get_or_create_collection("news_sentiment_data")
 
     # Fetch data from the API
-    response = requests.get(url)
+    response = requests.get(news_url)
     data = response.json()
 
     if 'feed' in data:
@@ -35,7 +38,7 @@ def load_data():
         for i, item in enumerate(news_items, start=1):
             # Prepare the document and metadata
             document = {
-                "id": str(i),  # Unique identifier for each news item
+                "id": str(i),
                 "title": item["title"],
                 "url": item["url"],
                 "time_published": item["time_published"],
@@ -57,33 +60,54 @@ def load_data():
             
             # Convert lists in metadata to strings
             topics_str = ", ".join(document["topics"])
-            ticker_sentiments_str = json.dumps(document["ticker_sentiments"])  # Store as JSON string
-
-            # Convert document to JSON string for ChromaDB
-            document_str = json.dumps(document)
+            ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
 
             # Insert the document into the ChromaDB collection
-            collection.add(
+            news_collection.add(
                 ids=[document["id"]],
                 metadatas=[{
                     "source": document["source"],
                     "time_published": document["time_published"],
-                    "topics": topics_str,  # Convert list to string
+                    "topics": topics_str,
                     "overall_sentiment": document["overall_sentiment_label"],
-                    "ticker_sentiments": ticker_sentiments_str,  # Store as JSON string
+                    "ticker_sentiments": ticker_sentiments_str,
                 }],
-                documents=[document_str]  # Store full document
+                documents=[json.dumps(document)]
             )
 
-        st.success(f"Inserted {len(news_items)} items into ChromaDB.")
+        st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
     else:
         st.error("No news data found.")
 
+# Function to load ticker trends data into ChromaDB
+def load_ticker_trends_data():
+    # Create or access a collection for ticker trends
+    ticker_collection = client.get_or_create_collection("ticker_trends_data")
+
+    # Fetch data from the API
+    response = requests.get(tickers_url)
+    data = response.json()
+
+    # Validate data and store it
+    if "metadata" in data and "top_gainers" in data:
+        ticker_collection.add(
+            ids=["ticker_trends_metadata"],
+            metadatas=[{"type": "ticker_trends_metadata"}],
+            documents=[json.dumps(data)]
+        )
+        st.success("Ticker trends data added to ChromaDB.")
+    else:
+        st.error("No ticker trends data found.")
+
 # Function to retrieve information from ChromaDB
 def retrieve_information():
-    # Create or access the collection
-    collection = client.get_or_create_collection("news_sentiment_data")
-    
+    # Choose a collection
+    collection_type = st.radio("Select Collection", ["News Sentiment", "Ticker Trends"])
+    if collection_type == "News Sentiment":
+        collection = client.get_or_create_collection("news_sentiment_data")
+    else:
+        collection = client.get_or_create_collection("ticker_trends_data")
+
     # Input ID for retrieval
     doc_id = st.text_input("Enter the document ID to retrieve:", "1")
 
@@ -93,18 +117,17 @@ def retrieve_information():
             if results['documents']:
                 for document, metadata in zip(results['documents'], results['metadatas']):
                     parsed_document = json.loads(document)
-                    parsed_ticker_sentiments = json.loads(metadata["ticker_sentiments"])
-                    st.write("### News Title:", parsed_document["title"])
-                    st.write("**Summary:**", parsed_document["summary"])
-                    st.write("**Topics:**", metadata["topics"])
-                    st.write("**Ticker Sentiments:**", parsed_ticker_sentiments)
+                    st.write("### Document Content")
+                    st.json(parsed_document)
             else:
                 st.warning("No document found with the given ID.")
         except Exception as e:
             st.error(f"Error retrieving document: {e}")
 
 # Main logic
-if option == "Load Data":
-    load_data()
+if option == "Load News Data":
+    load_news_data()
+elif option == "Load Ticker Trends Data":
+    load_ticker_trends_data()
 elif option == "Retrieve Information":
     retrieve_information()
