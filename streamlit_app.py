@@ -7,7 +7,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb.config import Settings
 from crewai import Agent
-from crewai_tools import BaseTool
+from crewai_tools.tools.rag_tool import RagTool
 from openai import OpenAI
 
 # Initialize OpenAI and ChromaDB Clients
@@ -29,34 +29,17 @@ option = st.sidebar.radio(
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
 
-# Custom Tool: ChromaDB Integration
-class ChromaDBTool(BaseTool):
-    def __init__(self, collection_name):
-        self.client = chromadb.PersistentClient()
-        self.collection = self.client.get_or_create_collection(collection_name)
+# Initialize RagTool
+news_rag_tool = RagTool()
+ticker_rag_tool = RagTool()
 
-    def execute(self, query):
-        if "query_text" in query:
-            # Perform semantic search
-            return self.collection.query(query_text=query["query_text"], n_results=query.get("n_results", 5))
-        elif "add" in query:
-            # Add documents to the collection
-            self.collection.add(
-                ids=query["add"]["ids"],
-                metadatas=query["add"]["metadatas"],
-                documents=query["add"]["documents"],
-            )
-            return "Data added successfully."
-        else:
-            raise ValueError("Unsupported operation.")
-
-### Function to Load News Data into ChromaDB ###
+### Function to Load News Data into RagTool ###
 def load_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
     try:
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
+
         if 'feed' in data:
             news_items = data['feed']
             for i, item in enumerate(news_items, start=1):
@@ -80,20 +63,9 @@ def load_news_data():
                         for ticker in item.get("ticker_sentiment", [])
                     ],
                 }
-                topics_str = ", ".join(document["topics"])
-                ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
-                news_collection.add(
-                    ids=[document["id"]],
-                    metadatas=[{
-                        "source": document["source"],
-                        "time_published": document["time_published"],
-                        "topics": topics_str,
-                        "overall_sentiment": document["overall_sentiment_label"],
-                        "ticker_sentiments": ticker_sentiments_str,
-                    }],
-                    documents=[json.dumps(document)]
-                )
-            st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
+                # Add document to RagTool
+                news_rag_tool.add_document(content=json.dumps(document), metadata={"source": "news", "id": str(i)})
+            st.success(f"Loaded {len(news_items)} news items into RagTool.")
         else:
             st.error("No news data found.")
     except requests.exceptions.RequestException as e:
@@ -101,56 +73,25 @@ def load_news_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve News Data from ChromaDB ###
-def retrieve_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
-    if st.button("Retrieve News"):
-        try:
-            results = news_collection.get(ids=[doc_id])
-            if results['documents']:
-                for document, metadata in zip(results['documents'], results['metadatas']):
-                    parsed_document = json.loads(document)
-                    st.write("### News Data")
-                    st.json(parsed_document)
-            else:
-                st.warning("No data found for the given News ID.")
-        except Exception as e:
-            st.error(f"Error retrieving news data: {e}")
-
-### Function to Load Ticker Trends Data into ChromaDB ###
+### Function to Load Ticker Trends Data into RagTool ###
 def load_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
     try:
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
+
         if "metadata" in data and "top_gainers" in data:
             metadata = {"metadata": data["metadata"], "last_updated": data["last_updated"]}
             top_gainers = data["top_gainers"]
             top_losers = data["top_losers"]
             most_actively_traded = data["most_actively_traded"]
-            ticker_collection.add(
-                ids=["metadata"],
-                metadatas=[metadata],
-                documents=["Ticker Trends Metadata"],
-            )
-            ticker_collection.add(
-                ids=["top_gainers"],
-                metadatas=[{"type": "top_gainers"}],
-                documents=[json.dumps(top_gainers)],
-            )
-            ticker_collection.add(
-                ids=["top_losers"],
-                metadatas=[{"type": "top_losers"}],
-                documents=[json.dumps(top_losers)],
-            )
-            ticker_collection.add(
-                ids=["most_actively_traded"],
-                metadatas=[{"type": "most_actively_traded"}],
-                documents=[json.dumps(most_actively_traded)],
-            )
-            st.success("Ticker trends data added to ChromaDB.")
+
+            # Add documents to RagTool
+            ticker_rag_tool.add_document(content=json.dumps(top_gainers), metadata={"type": "top_gainers"})
+            ticker_rag_tool.add_document(content=json.dumps(top_losers), metadata={"type": "top_losers"})
+            ticker_rag_tool.add_document(content=json.dumps(most_actively_traded), metadata={"type": "most_actively_traded"})
+
+            st.success("Ticker trends data added to RagTool.")
         else:
             st.error("Invalid data format received from API.")
     except requests.exceptions.RequestException as e:
@@ -158,77 +99,52 @@ def load_ticker_trends_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve Ticker Trends Data ###
-def retrieve_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-    data_type = st.radio("Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"])
-    data_id_mapping = {
-        "Metadata": "metadata",
-        "Top Gainers": "top_gainers",
-        "Top Losers": "top_losers",
-        "Most Actively Traded": "most_actively_traded",
-    }
-    if st.button("Retrieve Data"):
-        try:
-            results = ticker_collection.get(ids=[data_id_mapping[data_type]])
-            if results["documents"]:
-                for document, metadata in zip(results["documents"], results["metadatas"]):
-                    st.write(f"### {data_type}")
-                    if data_type == "Metadata":
-                        st.json(metadata)
-                    else:
-                        st.json(json.loads(document))
-            else:
-                st.warning("No data found.")
-        except Exception as e:
-            st.error(f"Error retrieving data: {e}")
+### Function to Retrieve Data from RagTool ###
+def retrieve_data(rag_tool, query):
+    try:
+        results = rag_tool.query({"query_text": query, "n_results": 5})
+        for result in results:
+            st.json(result)
+    except Exception as e:
+        st.error(f"Error retrieving data: {e}")
 
-### CrewAI Agents ###
-company_analyst_tool = ChromaDBTool(collection_name="news_sentiment_data")
-market_trends_tool = ChromaDBTool(collection_name="ticker_trends_data")
+### Function to Generate Newsletter ###
+def generate_newsletter():
+    try:
+        news_query = "What are the latest financial news trends?"
+        ticker_query = "What are the top market gainers and losers?"
 
-company_analyst_agent = Agent(
-    role="Company Analyst",
-    backstory="An experienced financial analyst focusing on company news sentiment analysis.",
-    goal="Analyze news sentiment data to provide insights.",
-    tools=[company_analyst_tool],
-    llm=lambda query: openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": query}]
-    )["choices"][0]["message"]["content"]
-)
+        # Use RagTool to query data
+        news_data = news_rag_tool.query({"query_text": news_query, "n_results": 5})
+        ticker_data = ticker_rag_tool.query({"query_text": ticker_query, "n_results": 5})
 
-market_trends_agent = Agent(
-    role="Market Trends Analyst",
-    backstory="A financial analyst specializing in market trends and ticker insights.",
-    goal="Analyze ticker trends to provide market insights.",
-    tools=[market_trends_tool],
-    llm=lambda query: openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": query}]
-    )["choices"][0]["message"]["content"]
-)
+        # Combine results and send to OpenAI
+        combined_context = f"News Data: {news_data}\nTicker Data: {ticker_data}"
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a financial newsletter editor."},
+                {"role": "user", "content": f"Generate a newsletter based on this context:\n{combined_context}"}
+            ]
+        )
+        newsletter = response["choices"][0]["message"]["content"]
+        st.subheader("Generated Newsletter")
+        st.write(newsletter)
+    except Exception as e:
+        st.error(f"Error generating newsletter: {e}")
 
-newsletter_agent = Agent(
-    role="Newsletter Editor",
-    backstory="A skilled financial writer with a knack for summarizing complex information.",
-    goal="Compile a financial newsletter using all insights.",
-    tools=[],
-    llm=lambda query: openai_client.chat.completions.create(
-        model="gpt-4",
-        messages=[{"role": "user", "content": query}]
-    )["choices"][0]["message"]["content"]
-)
-
-### Main Logic ###
+# Main Logic
 if option == "Load News Data":
     load_news_data()
 elif option == "Retrieve News Data":
-    retrieve_news_data()
+    query = st.text_input("Enter query for news data:")
+    if st.button("Search News"):
+        retrieve_data(news_rag_tool, query)
 elif option == "Load Ticker Trends Data":
     load_ticker_trends_data()
 elif option == "Retrieve Ticker Trends Data":
-    retrieve_ticker_trends_data()
+    query = st.text_input("Enter query for ticker trends:")
+    if st.button("Search Ticker Trends"):
+        retrieve_data(ticker_rag_tool, query)
 elif option == "Generate Newsletter":
-    st.subheader("Generating Financial Newsletter...")
-    st.write("Newsletter feature under development.")
+    generate_newsletter()
