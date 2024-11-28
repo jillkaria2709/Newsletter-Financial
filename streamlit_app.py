@@ -62,7 +62,7 @@ def load_news_data():
                         "time_published": document["time_published"],
                         "overall_sentiment": document["overall_sentiment_label"]
                     }],
-                    documents=[json.dumps(document)]
+                    documents=[json.dumps(document)]  # Store as JSON string
                 )
 
             st.success(f"Loaded {len(data['feed'])} news items into ChromaDB.")
@@ -80,7 +80,7 @@ def retrieve_news_data():
             results = news_collection.get(ids=[doc_id])
             if results['documents']:
                 for document, metadata in zip(results['documents'], results['metadatas']):
-                    parsed_document = json.loads(document)
+                    parsed_document = json.loads(document)  # Parse JSON string back to dict
                     st.write("### News Data")
                     st.json(parsed_document)
             else:
@@ -98,12 +98,12 @@ def load_ticker_trends_data():
         if "top_gainers" in data and "top_losers" in data:
             ticker_collection.add(
                 ids=["top_gainers"],
-                documents=[json.dumps(data["top_gainers"])],
+                documents=[json.dumps(data["top_gainers"])],  # Store as JSON string
                 metadatas=[{"type": "Top Gainers"}]
             )
             ticker_collection.add(
                 ids=["top_losers"],
-                documents=[json.dumps(data["top_losers"])],
+                documents=[json.dumps(data["top_losers"])],  # Store as JSON string
                 metadatas=[{"type": "Top Losers"}]
             )
             st.success("Ticker trends data loaded into ChromaDB.")
@@ -129,7 +129,7 @@ def retrieve_ticker_trends_data():
             if results["documents"]:
                 for document, metadata in zip(results["documents"], results["metadatas"]):
                     st.write(f"### {metadata['type']}")
-                    st.json(json.loads(document))
+                    st.json(json.loads(document))  # Parse JSON string back to list/dict
             else:
                 st.warning("No data found.")
         except Exception as e:
@@ -154,7 +154,7 @@ def generate_newsletter():
                 f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
                 f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
                 f"Topics: {', '.join(doc.get('topics', [])) if isinstance(doc.get('topics', []), list) else 'N/A'}"
-                for doc in [json.loads(d) for d in news_results["documents"]]
+                for doc in [json.loads(d) for d in news_results["documents"]]  # Parse JSON string back to dict
             ]
         )
 
@@ -175,8 +175,8 @@ def generate_newsletter():
             return
 
         # Parse gainers and losers data
-        gainers_data = json.loads(gainers_results["documents"][0])
-        losers_data = json.loads(losers_results["documents"][0])
+        gainers_data = json.loads(gainers_results["documents"][0])  # Parse JSON string back to list
+        losers_data = json.loads(losers_results["documents"][0])  # Parse JSON string back to list
 
         # Take any top 5 gainers and losers
         top_5_gainers = gainers_data[:5]
@@ -221,7 +221,6 @@ def generate_newsletter():
         # Display the newsletter
         st.subheader("Generated Newsletter")
         st.write(newsletter)
-
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
