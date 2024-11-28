@@ -1,53 +1,107 @@
 import streamlit as st
-from openai import OpenAI
+import requests
+import json
+import chromadb
+from chromadb.config import Settings
 
-# Show title and description.
-st.title("📄 Document question answering")
-st.write(
-    "Upload a document below and ask a question about it – GPT will answer! "
-    "To use this app, you need to provide an OpenAI API key, which you can get [here](https://platform.openai.com/account/api-keys). "
-)
+# Initialize ChromaDB Persistent Client
+client = chromadb.PersistentClient()
 
-# Ask user for their OpenAI API key via `st.text_input`.
-# Alternatively, you can store the API key in `./.streamlit/secrets.toml` and access it
-# via `st.secrets`, see https://docs.streamlit.io/develop/concepts/connections/secrets-management
-openai_api_key = st.text_input("OpenAI API Key", type="password")
-if not openai_api_key:
-    st.info("Please add your OpenAI API key to continue.", icon="🗝️")
-else:
+# Replace 'YOUR_API_KEY' with your actual Alpha Vantage API key
+api_key = 'H329FP3SD3PO0M7H'
+url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
 
-    # Create an OpenAI client.
-    client = OpenAI(api_key=openai_api_key)
+# Streamlit App Title
+st.title("News Sentiment RAG System")
 
-    # Let the user upload a file via `st.file_uploader`.
-    uploaded_file = st.file_uploader(
-        "Upload a document (.txt or .md)", type=("txt", "md")
-    )
+# Sidebar options
+st.sidebar.header("Options")
+option = st.sidebar.radio("Choose an action:", ["Load Data", "Retrieve Information"])
 
-    # Ask the user for a question via `st.text_area`.
-    question = st.text_area(
-        "Now ask a question about the document!",
-        placeholder="Can you give me a short summary?",
-        disabled=not uploaded_file,
-    )
+# Function to load data into ChromaDB
+def load_data():
+    # Create or access a collection in ChromaDB
+    collection = client.get_or_create_collection("news_sentiment_data")
 
-    if uploaded_file and question:
+    # Fetch data from the API
+    response = requests.get(url)
+    data = response.json()
 
-        # Process the uploaded file and question.
-        document = uploaded_file.read().decode()
-        messages = [
-            {
-                "role": "user",
-                "content": f"Here's a document: {document} \n\n---\n\n {question}",
+    if 'feed' in data:
+        news_items = data['feed']
+        for i, item in enumerate(news_items, start=1):
+            # Prepare the document and metadata
+            document = {
+                "id": str(i),  # Unique identifier for each news item
+                "title": item["title"],
+                "url": item["url"],
+                "time_published": item["time_published"],
+                "source": item["source"],
+                "summary": item.get("summary", "N/A"),
+                "topics": [topic["topic"] for topic in item.get("topics", [])],
+                "overall_sentiment_label": item.get("overall_sentiment_label", "N/A"),
+                "overall_sentiment_score": item.get("overall_sentiment_score", "N/A"),
+                "ticker_sentiments": [
+                    {
+                        "ticker": ticker["ticker"],
+                        "relevance_score": ticker["relevance_score"],
+                        "ticker_sentiment_label": ticker["ticker_sentiment_label"],
+                        "ticker_sentiment_score": ticker["ticker_sentiment_score"],
+                    }
+                    for ticker in item.get("ticker_sentiment", [])
+                ],
             }
-        ]
+            
+            # Convert lists in metadata to strings
+            topics_str = ", ".join(document["topics"])
+            ticker_sentiments_str = json.dumps(document["ticker_sentiments"])  # Store as JSON string
 
-        # Generate an answer using the OpenAI API.
-        stream = client.chat.completions.create(
-            model="gpt-3.5-turbo",
-            messages=messages,
-            stream=True,
-        )
+            # Convert document to JSON string for ChromaDB
+            document_str = json.dumps(document)
 
-        # Stream the response to the app using `st.write_stream`.
-        st.write_stream(stream)
+            # Insert the document into the ChromaDB collection
+            collection.add(
+                ids=[document["id"]],
+                metadatas=[{
+                    "source": document["source"],
+                    "time_published": document["time_published"],
+                    "topics": topics_str,  # Convert list to string
+                    "overall_sentiment": document["overall_sentiment_label"],
+                    "ticker_sentiments": ticker_sentiments_str,  # Store as JSON string
+                }],
+                documents=[document_str]  # Store full document
+            )
+
+        st.success(f"Inserted {len(news_items)} items into ChromaDB.")
+    else:
+        st.error("No news data found.")
+
+# Function to retrieve information from ChromaDB
+def retrieve_information():
+    # Create or access the collection
+    collection = client.get_or_create_collection("news_sentiment_data")
+    
+    # Input ID for retrieval
+    doc_id = st.text_input("Enter the document ID to retrieve:", "1")
+
+    if st.button("Retrieve"):
+        try:
+            results = collection.get(ids=[doc_id])
+            if results['documents']:
+                for document, metadata in zip(results['documents'], results['metadatas']):
+                    parsed_document = json.loads(document)
+                    parsed_ticker_sentiments = json.loads(metadata["ticker_sentiments"])
+                    st.write("### News Title:", parsed_document["title"])
+                    st.write("**Summary:**", parsed_document["summary"])
+                    st.write("**Topics:**", metadata["topics"])
+                    st.write("**Ticker Sentiments:**", parsed_ticker_sentiments)
+            else:
+                st.warning("No document found with the given ID.")
+        except Exception as e:
+            st.error(f"Error retrieving document: {e}")
+
+# Main logic
+if option == "Load Data":
+    load_data()
+elif option == "Retrieve Information":
+    retrieve_information()
