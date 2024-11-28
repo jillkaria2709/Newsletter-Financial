@@ -132,28 +132,27 @@ def retrieve_ticker_trends_data():
                 st.warning("No data found.")
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
-
 def generate_newsletter():
     try:
         # Retrieve all documents from the news collection
         news_results = news_collection.query(
             query_texts=[""],  # Empty query text to fetch all documents
-            n_results=1000     # A high number to ensure all documents are fetched
+            n_results=1000     # Fetch up to 1000 documents
         )
-        # Parse documents and metadata properly
+        # Extract summaries and titles directly without unnecessary parsing
         news_content = "\n".join(
-            [f"{json.loads(meta)['title']}: {json.loads(doc)['summary']}" 
+            [f"{meta['title']}: {doc['summary']}" 
              for doc, meta in zip(news_results["documents"], news_results["metadatas"])]
         )
 
         # Retrieve all documents from the ticker trends collection
         ticker_results = ticker_collection.query(
             query_texts=[""],  # Empty query text to fetch all documents
-            n_results=1000     # A high number to ensure all documents are fetched
+            n_results=1000     # Fetch up to 1000 documents
         )
-        # Parse documents and metadata properly
+        # Extract ticker information directly
         ticker_content = "\n".join(
-            [f"{json.loads(meta)['type']}: {json.loads(doc)}" 
+            [f"{meta['type']}: {doc}" 
              for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])]
         )
 
@@ -175,7 +174,6 @@ def generate_newsletter():
         st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
-
 
 # Main Logic
 if option == "Load News Data":
