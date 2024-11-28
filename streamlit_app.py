@@ -5,7 +5,6 @@ __import__('pysqlite3')
 import sys,os
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from chromadb.config import Settings
 from openai import OpenAI
 
 # Initialize ChromaDB Persistent Client
