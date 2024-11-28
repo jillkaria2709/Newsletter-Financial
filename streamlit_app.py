@@ -137,31 +137,41 @@ def retrieve_ticker_trends_data():
 
 def generate_newsletter():
     try:
-        # Retrieve all documents from the news collection
+        # Query news collection
         news_results = news_collection.query(
-            query_texts=[""],  # Empty query text to fetch all documents
-            n_results=1000     # Fetch up to 1000 documents
+            query_texts=[""],
+            n_results=1000
         )
-        
+
         # Process news data
         news_content = "\n".join(
             [
-                f"{doc['title']}: {doc['summary']}\nSource: {doc['source']}\nPublished: {doc['time_published']}\nSentiment: {doc['overall_sentiment_label']} (Score: {doc['overall_sentiment_score']})\nTopics: {', '.join(doc['topics'])}"
+                # Parse document if it's a string
+                f"{doc.get('title', 'No Title')}: {doc.get('summary', 'No Summary')}\n"
+                f"Source: {doc.get('source', 'Unknown')}\n"
+                f"Published: {doc.get('time_published', 'Unknown')}\n"
+                f"Sentiment: {doc.get('overall_sentiment_label', 'Unknown')} "
+                f"(Score: {doc.get('overall_sentiment_score', 'N/A')})\n"
+                f"Topics: {', '.join(doc.get('topics', []))}"
+                if isinstance(doc, dict) else
+                f"Unstructured Document: {doc}"
                 for doc in news_results["documents"]
             ]
         )
 
-        # Retrieve all documents from the ticker trends collection
+        # Query ticker trends collection
         ticker_results = ticker_collection.query(
-            query_texts=[""],  # Empty query text to fetch all documents
-            n_results=1000     # Fetch up to 1000 documents
+            query_texts=[""],
+            n_results=1000
         )
-        
+
         # Process ticker data
         ticker_content = "\n".join(
             [
-                f"{doc['ticker']}: ${doc['price']} (Change: {doc['change_amount']} | {doc['change_percentage']}%)\nVolume: {doc['volume']}"
-                for doc in ticker_results["documents"]
+                f"{meta.get('type', 'Unknown Type')}: {doc}"
+                if isinstance(doc, dict) else
+                f"Unstructured Document: {doc}"
+                for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
             ]
         )
 
