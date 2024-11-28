@@ -5,6 +5,7 @@ import chromadb
 from chromadb.config import Settings
 from crewai import Agent, Task, Crew, Process
 from openai import OpenAI
+from crewai_tools import BaseTool
 
 # Initialize OpenAI and ChromaDB Clients
 openai_client = OpenAI(api_key=st.secrets["api_keys"]["openai"])
@@ -14,6 +15,27 @@ client = chromadb.PersistentClient()
 api_key = st.secrets["api_keys"]["alpha_vantage"]
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={api_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={api_key}'
+
+# Custom ChromaDB Tool
+class ChromaDBTool(BaseTool):
+    def __init__(self, collection_name):
+        self.client = chromadb.PersistentClient()
+        self.collection = self.client.get_or_create_collection(collection_name)
+
+    def execute(self, query):
+        if "query_text" in query:
+            # Query ChromaDB
+            return self.collection.query(query_text=query["query_text"], n_results=query.get("n_results", 5))
+        elif "add" in query:
+            # Add to ChromaDB
+            self.collection.add(
+                ids=query["add"]["ids"],
+                metadatas=query["add"]["metadatas"],
+                documents=query["add"]["documents"],
+            )
+            return "Data added successfully."
+        else:
+            raise ValueError("Unsupported operation.")
 
 # Streamlit App Title
 st.title("Financial Insights Newsletter Generator")
@@ -159,11 +181,14 @@ def retrieve_ticker_trends_data():
             st.error(f"Error retrieving data: {e}")
 
 ### CrewAI Agents ###
+company_analyst_tool = ChromaDBTool(collection_name="news_sentiment_data")
+market_trends_tool = ChromaDBTool(collection_name="ticker_trends_data")
+
 company_analyst_agent = Agent(
     role="Company Analyst",
     backstory="An experienced financial analyst focusing on company news sentiment analysis.",
     goal="Analyze news sentiment data to provide insights.",
-    tools=[],
+    tools=[company_analyst_tool],
     llm=lambda query: openai_client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": query}]
@@ -174,7 +199,7 @@ market_trends_agent = Agent(
     role="Market Trends Analyst",
     backstory="A financial analyst specializing in market trends and ticker insights.",
     goal="Analyze ticker trends to provide market insights.",
-    tools=[],
+    tools=[market_trends_tool],
     llm=lambda query: openai_client.chat.completions.create(
         model="gpt-4",
         messages=[{"role": "user", "content": query}]
@@ -203,4 +228,4 @@ elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
     st.subheader("Generating Financial Newsletter...")
-    st.write("Newsletter feature under construction.")
+    st.write("Newsletter feature under development.")
