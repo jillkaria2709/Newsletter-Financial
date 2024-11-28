@@ -173,12 +173,12 @@ def generate_newsletter():
         # Extract gainers and losers
         gainers = [
             json.loads(doc) if isinstance(doc, str) else doc
-            for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
+            for doc, meta in zip(ticker_results["gainers"], ticker_results["metadatas"])
             if isinstance(meta, dict) and meta.get("type") == "top_gainers"
         ]
         losers = [
             json.loads(doc) if isinstance(doc, str) else doc
-            for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
+            for doc, meta in zip(ticker_results["losers"], ticker_results["metadatas"])
             if isinstance(meta, dict) and meta.get("type") == "top_losers"
         ]
 
