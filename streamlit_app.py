@@ -7,7 +7,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from crewai import Agent, Task, Crew, Process
 from openai import ChatCompletion
-from chromadb.api import PersistentClient
+from chromadb import PersistentClient
 
 class ChromaDBTool:
     def __init__(self, collection_name):
