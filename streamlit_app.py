@@ -135,14 +135,6 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving ticker trends data: {e}")
 
-def truncate_content(content, max_chars=4000):
-    """
-    Truncate content to a maximum number of characters.
-    """
-    if len(content) > max_chars:
-        return content[:max_chars] + "\n\n[Content truncated...]"
-    return content
-
 def generate_newsletter():
     try:
         # Query and process news collection - Limit to Top 5
@@ -178,7 +170,7 @@ def generate_newsletter():
             st.error("No ticker data found.")
             return
 
-        # Extract gainers and losers
+        # Process gainers and losers using RAG
         gainers = [
             json.loads(doc) if isinstance(doc, str) else doc
             for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
@@ -202,22 +194,27 @@ def generate_newsletter():
             reverse=True
         )[:5]
 
-        # Prepare raw ticker content
-        raw_ticker_content = "\n".join(
+        # Prepare summarized gainers and losers data
+        gainers_content = "\n".join(
             [
                 f"Gainer: {gainer.get('ticker', 'Unknown')} - Change: {gainer.get('change_percentage', 'N/A')} "
                 f"(Price: {gainer.get('price', 'N/A')}, Volume: {gainer.get('volume', 'N/A')})"
                 for gainer in top_5_gainers
-            ] + [
+            ]
+        )
+        losers_content = "\n".join(
+            [
                 f"Loser: {loser.get('ticker', 'Unknown')} - Change: {loser.get('change_percentage', 'N/A')} "
                 f"(Price: {loser.get('price', 'N/A')}, Volume: {loser.get('volume', 'N/A')})"
                 for loser in top_5_losers
             ]
         )
 
+        # Combine and summarize tickers data
+        raw_ticker_content = f"Top Gainers:\n{gainers_content}\n\nTop Losers:\n{losers_content}"
         summarized_tickers = summarize_content(
             raw_ticker_content,
-            "Summarize the following top 5 gainers and losers for a financial newsletter:"
+            "Summarize the following ticker trends content for a financial newsletter:"
         )
 
         # Combine summarized data for the newsletter
@@ -239,23 +236,6 @@ def generate_newsletter():
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
-
-def summarize_content(content, role_description="Summarize the following content:"):
-    """
-    Summarize a given content string using OpenAI.
-    """
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful summarizer."},
-                {"role": "user", "content": f"{role_description}\n{content}"}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Error during summarization: {e}")
-        return "Error during summarization."
 
 def summarize_content(content, role_description="Summarize the following content:"):
     """
