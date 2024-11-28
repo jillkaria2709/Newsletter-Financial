@@ -160,7 +160,7 @@ def summarize_content(content, role_description="Summarize the following content
 
             for chunk in chunks:
                 response = openai_client.chat.completions.create(
-                    model="gpt-4",
+                    model="gpt-4o-mini",
                     messages=[
                         {"role": "system", "content": "You are a helpful summarizer."},
                         {"role": "user", "content": f"{role_description}\n{chunk}"}
@@ -171,7 +171,7 @@ def summarize_content(content, role_description="Summarize the following content
             # Summarize the combined chunk summaries
             combined_summary = "\n".join(chunk_summaries)
             response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a helpful summarizer."},
                     {"role": "user", "content": f"Summarize the following combined content:\n{combined_summary}"}
@@ -181,7 +181,7 @@ def summarize_content(content, role_description="Summarize the following content
         else:
             # Summarize directly if content is within token limits
             response = openai_client.chat.completions.create(
-                model="gpt-4",
+                model="gpt-4o-mini",
                 messages=[
                     {"role": "system", "content": "You are a helpful summarizer."},
                     {"role": "user", "content": f"{role_description}\n{content}"}
@@ -263,7 +263,7 @@ def generate_newsletter():
 
         # Generate the final newsletter
         response = openai_client.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a financial newsletter editor."},
                 {"role": "user", "content": f"Generate a newsletter using the following summarized data:\n{combined_data}"}
