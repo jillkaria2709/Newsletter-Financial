@@ -143,23 +143,6 @@ def truncate_content(content, max_chars=4000):
         return content[:max_chars] + "\n\n[Content truncated...]"
     return content
 
-def summarize_content(content, role_description="Summarize the following content:"):
-    """
-    Summarize a given content string using OpenAI.
-    """
-    try:
-        response = openai_client.chat.completions.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "You are a helpful summarizer."},
-                {"role": "user", "content": f"{role_description}\n{content}"}
-            ]
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        st.error(f"Error during summarization: {e}")
-        return "Error during summarization."
-
 def generate_newsletter():
     try:
         # Query and process news collection
@@ -177,7 +160,10 @@ def generate_newsletter():
                 for doc in news_results["documents"]
             ]
         )
-        summarized_news = summarize_content(raw_news_content, "Summarize the following news content for a newsletter:")
+        summarized_news = summarize_content(
+            raw_news_content, 
+            "Summarize the following news content for a financial newsletter:"
+        )
 
         # Query and process ticker trends collection
         ticker_results = ticker_collection.query(query_texts=[""], n_results=1000)
@@ -189,7 +175,10 @@ def generate_newsletter():
                 for doc, meta in zip(ticker_results["documents"], ticker_results["metadatas"])
             ]
         )
-        summarized_tickers = summarize_content(raw_ticker_content, "Summarize the following ticker trends content for a newsletter:")
+        summarized_tickers = summarize_content(
+            raw_ticker_content, 
+            "Summarize the following ticker trends content for a financial newsletter:"
+        )
 
         # Combine summarized data for the newsletter
         combined_data = f"News Summaries:\n{summarized_news}\n\nTicker Trends:\n{summarized_tickers}"
@@ -209,6 +198,23 @@ def generate_newsletter():
         st.write(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
+
+def summarize_content(content, role_description="Summarize the following content:"):
+    """
+    Summarize a given content string using OpenAI.
+    """
+    try:
+        response = openai_client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are a helpful summarizer."},
+                {"role": "user", "content": f"{role_description}\n{content}"}
+            ]
+        )
+        return response.choices[0].message.content
+    except Exception as e:
+        st.error(f"Error during summarization: {e}")
+        return "Error during summarization."
 
 
 # Main Logic
