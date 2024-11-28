@@ -109,24 +109,46 @@ def load_ticker_trends_data():
     # Create or access a collection for ticker trends
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
-    # Fetch data from the API
     try:
+        # Fetch data from the API
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
 
+        # Validate data structure
         if "metadata" in data and "top_gainers" in data:
-            # Store data in ChromaDB
-            ticker_collection.add(
-                ids=["ticker_trends_metadata"],
-                metadatas=[{"type": "ticker_trends_metadata"}],
-                documents=[json.dumps(data)]
-            )
-            st.success("Ticker trends data added to ChromaDB.")
+            # Decompose data for structured storage
+            metadata = {
+                "metadata": data["metadata"],
+                "last_updated": data["last_updated"],
+            }
+            top_gainers = data["top_gainers"]
+            top_losers = data["top_losers"]
+            most_actively_traded = data["most_actively_traded"]
 
-            # Verify by retrieving immediately
-            results = ticker_collection.get(ids=["ticker_trends_metadata"])
-            st.write("Saved Data:", results)
+            # Store decomposed data in ChromaDB
+            ticker_collection.add(
+                ids=["metadata"],
+                metadatas=[metadata],
+                documents=["Ticker Trends Metadata"],
+            )
+            ticker_collection.add(
+                ids=["top_gainers"],
+                metadatas=[{"type": "top_gainers"}],
+                documents=[json.dumps(top_gainers)],
+            )
+            ticker_collection.add(
+                ids=["top_losers"],
+                metadatas=[{"type": "top_losers"}],
+                documents=[json.dumps(top_losers)],
+            )
+            ticker_collection.add(
+                ids=["most_actively_traded"],
+                metadatas=[{"type": "most_actively_traded"}],
+                documents=[json.dumps(most_actively_traded)],
+            )
+
+            st.success("Ticker trends data added to ChromaDB.")
         else:
             st.error("Invalid data format received from API.")
     except requests.exceptions.RequestException as e:
@@ -134,23 +156,40 @@ def load_ticker_trends_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve Ticker Trends Data from ChromaDB ###
 def retrieve_ticker_trends_data():
     # Access the collection
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
-    if st.button("Retrieve Ticker Trends"):
+    st.write("Select the category of data to retrieve:")
+    data_type = st.radio(
+        "Data Type", ["Metadata", "Top Gainers", "Top Losers", "Most Actively Traded"]
+    )
+
+    # Map data types to IDs
+    data_id_mapping = {
+        "Metadata": "metadata",
+        "Top Gainers": "top_gainers",
+        "Top Losers": "top_losers",
+        "Most Actively Traded": "most_actively_traded",
+    }
+
+    # Retrieve and display the selected data type
+    if st.button("Retrieve Data"):
         try:
-            results = ticker_collection.get(ids=["ticker_trends_metadata"])
-            if results['documents']:
-                for document in results['documents']:
-                    parsed_document = json.loads(document)
-                    st.write("### Ticker Trends Data")
-                    st.json(parsed_document)
+            results = ticker_collection.get(ids=[data_id_mapping[data_type]])
+            if results["documents"]:
+                for document, metadata in zip(
+                    results["documents"], results["metadatas"]
+                ):
+                    st.write(f"### {data_type}")
+                    if data_type == "Metadata":
+                        st.json(metadata)
+                    else:
+                        st.json(json.loads(document))  # Parse stored JSON
             else:
-                st.warning("No ticker trends data found.")
+                st.warning("No data found.")
         except Exception as e:
-            st.error(f"Error retrieving ticker trends data: {e}")
+            st.error(f"Error retrieving data: {e}")
 
 # Main Logic
 if option == "Load News Data":
