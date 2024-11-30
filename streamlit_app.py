@@ -226,7 +226,6 @@ if st.button("Generate Newsletter"):
 ### Chatbot UI ###
 st.subheader("Chatbot")
 
-# Input box for user queries
 user_input = st.text_input("Ask me something:")
 
 if st.button("Send"):
@@ -248,18 +247,29 @@ if st.button("Send"):
                     f"Close: {ticker_result['close']}, Volume: {ticker_result['volume']}"
                 )
         else:
-            # Step 2: Check in RAG (ChromaDB)
+            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
             st.write("Searching in stored RAG data...")
             rag_collections = ["news_sentiment_data", "ticker_trends_data"]
             rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
 
             if rag_results:
-                # Display RAG results
-                st.write("Found the following information in stored data:")
-                for result in rag_results:
-                    st.write(result)
+                # Combine RAG results into a context for GPT-4
+                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
+                context = "\n".join(rag_results)
+                prompt = (
+                    f"You are a helpful assistant. Based on the user's query below, and the context from stored data, "
+                    f"provide a well-framed and relevant response:\n\n"
+                    f"Query: {user_input}\n\n"
+                    f"Context from RAG:\n{context}"
+                )
+                response = call_openai_gpt4(prompt)
+                st.write(response)
             else:
-                # Step 3: Fallback to OpenAI
+                # Fallback to OpenAI GPT-4
                 st.write("Not found in today's data. Searching online...")
-                fallback_response = call_openai_gpt4(user_input)
-                st.write(f"Here is some information I found online:\n\n{fallback_response}")
+                prompt = (
+                    f"You are a helpful assistant. Based on the user's query below, provide a well-framed and "
+                    f"relevant response:\n\nQuery: {user_input}"
+                )
+                response = call_openai_gpt4(prompt)
+                st.write(response)
