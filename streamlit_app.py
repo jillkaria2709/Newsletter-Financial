@@ -24,9 +24,9 @@ if not bespoke_key:
 
 # Initialize Bespoke Labs Client with Error Handling
 try:
-    bl = BespokeLabs(
-        auth_token=bespoke_key
-        )
+    # Pass the API key directly
+    bl = BespokeLabs(auth_token=bespoke_key)
+    st.success("Bespoke Labs client initialized successfully.")
 except TypeError as te:
     st.error(f"Failed to initialize Bespoke Labs client due to argument issues: {te}")
     bl = None
