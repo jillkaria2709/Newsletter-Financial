@@ -200,7 +200,7 @@ def generate_newsletter():
         """
         
         # Summarize with OpenAI
-        response = openai.Completion.create(
+        response = openai.chat.completions.create(
             engine="text-davinci-003",
             prompt=f"Summarize the following RAG data into a concise newsletter:\n{input_text}",
             max_tokens=1500,
