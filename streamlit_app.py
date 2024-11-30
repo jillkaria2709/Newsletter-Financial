@@ -7,7 +7,6 @@ import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 
-
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
 
@@ -85,20 +84,42 @@ def retrieve_from_chromadb(collection_name, query, top_k=5):
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        
-        # Access the content attribute directly
-        content = response.choices[0].message.content
-        return content.strip()
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return f"Error generating response: {str(e)}"
+
+def fetch_ticker_price(ticker):
+    """Fetch the latest price for the given ticker."""
+    try:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        if "Time Series (Daily)" in data:
+            latest_date = max(data["Time Series (Daily)"].keys())
+            latest_prices = data["Time Series (Daily)"][latest_date]
+            return {
+                "ticker": ticker,
+                "date": latest_date,
+                "open": latest_prices["1. open"],
+                "high": latest_prices["2. high"],
+                "low": latest_prices["3. low"],
+                "close": latest_prices["4. close"],
+                "volume": latest_prices["5. volume"]
+            }
+        else:
+            return {"error": "Invalid ticker or no data available."}
+    except Exception as e:
+        return {"error": f"Error fetching ticker price: {e}"}
 
 ### RAG-Agent Definition ###
 
@@ -143,8 +164,6 @@ tasks = [
     {"description": "Write the newsletter", "agent": writer},
 ]
 
-### Newsletter Generation ###
-
 def generate_newsletter_with_rag():
     """Generate the newsletter using RAG and agents."""
     newsletter_content = []
@@ -179,6 +198,26 @@ def generate_newsletter_with_rag():
 
     st.subheader("Generated Newsletter")
     st.markdown("\n".join(newsletter_content))
+
+### Chatbot UI ###
+st.subheader("Chatbot")
+
+user_input = st.text_input("Ask me something:")
+if st.button("Send"):
+    if "newsletter" in user_input.lower():
+        st.write("This is a daily financial newsletter providing market trends and stock updates.")
+    elif "ticker" in user_input.lower():
+        try:
+            ticker = user_input.split(" ")[-1].strip()
+            result = fetch_ticker_price(ticker)
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                st.write(f"Ticker: {result['ticker']}, Date: {result['date']}, Close: {result['close']}")
+        except Exception as e:
+            st.error(f"Error processing ticker: {e}")
+    else:
+        st.write("I can answer about newsletter or fetch stock prices. Try asking about a ticker!")
 
 ### Main Page Buttons ###
 if st.button("Fetch and Store News Data"):
