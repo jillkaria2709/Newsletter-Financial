@@ -93,10 +93,10 @@ def call_openai_gpt4(prompt):
             ]
         )
         # Debugging: Log the response structure
-        print("API Response:", response)
+        st.write("GPT-4 API Response:", response)
 
         # Access the content using object attributes
-        content = response.choices[0].message.content
+        content = response['choices'][0]['message']['content']
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
@@ -109,7 +109,7 @@ class RAGAgent:
         self.role = role
         self.goal = goal
 
-    def execute_task(self, task_description):
+    def execute_task(self, task_description, additional_data=None):
         """Execute the task using RAG and GPT-4 summarization."""
         # Retrieve relevant data from ChromaDB
         if "news" in self.goal.lower():
@@ -119,8 +119,13 @@ class RAGAgent:
         else:
             retrieved_data = []
 
+        # Combine additional data if provided
+        combined_data = retrieved_data
+        if additional_data:
+            combined_data.extend(additional_data)
+
         # Combine retrieved data with task description
-        augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(retrieved_data)}"
+        augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}"
 
         # Call GPT-4 for summarization
         summary = call_openai_gpt4(augmented_prompt)
@@ -145,13 +150,35 @@ tasks = [
 def generate_newsletter_with_rag():
     """Generate the newsletter using RAG and agents."""
     newsletter_content = []
-    for task in tasks:
-        st.write(f"Executing: {task['description']} with {task['agent'].role}")
-        result = task['agent'].execute_task(task['description'])
-        if "Error" in result:
-            st.error(f"Failed to complete task: {task['description']}")
-        else:
-            newsletter_content.append(f"## {task['agent'].role}\n{result}\n")
+
+    # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
+    st.write("Executing: Extract insights from news data (Researcher)")
+    news_results = researcher.execute_task("Extract insights from news data")
+
+    st.write("Executing: Analyze market trends (Market Analyst)")
+    trends_results = market_analyst.execute_task("Analyze market trends")
+
+    st.write("Executing: Analyze risk data (Risk Analyst)")
+    risk_results = risk_analyst.execute_task("Analyze risk data")
+
+    # Step 2: Combine insights for Writer Agent
+    combined_data = [
+        {"role": "Researcher", "content": news_results},
+        {"role": "Market Analyst", "content": trends_results},
+        {"role": "Risk Analyst", "content": risk_results}
+    ]
+
+    # Step 3: Generate the newsletter with Writer Agent
+    st.write("Executing: Write the newsletter (Writer)")
+    writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
+    newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
+
+    # Step 4: Display the generated newsletter
+    if "Error" in newsletter:
+        st.error("Failed to generate the newsletter.")
+    else:
+        newsletter_content.append(f"## Writer's Newsletter\n{newsletter}\n")
+
     st.subheader("Generated Newsletter")
     st.markdown("\n".join(newsletter_content))
 
