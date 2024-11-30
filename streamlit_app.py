@@ -8,9 +8,8 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs 
 
-bl = BespokeLabs(
+client = BespokeLabs(
     auth_token=st.secrets["bespoke"]["api_key"],
-    http_client=None  # Ensure no custom HTTP client is used
 )
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -218,7 +217,7 @@ def generate_newsletter_with_rag():
     # Step 5: Validate the newsletter with Bespoke Labs
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
-        factcheck_response = bl.minicheck.factcheck.create(
+        factcheck_response = client.minicheck.factcheck.create(
             claim=newsletter,
             context=json.dumps(combined_data)  # Use combined RAG data as context
         )
