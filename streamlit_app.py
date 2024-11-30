@@ -29,7 +29,7 @@ def retrieve_from_multiple_rags(query, collections, top_k=5):
     results = []
     for collection_name in collections:
         collection_results = retrieve_from_chromadb(collection_name, query, top_k)
-        results.extend(collection_results)
+        results.extend([doc for doc in collection_results if doc])  # Filter empty results
     return results
 
 def update_chromadb(collection_name, data):
@@ -100,13 +100,10 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        
-        # Access the content attribute directly
-        content = response.choices[0].message.content
-        return content.strip()
+        return response.choices[0].message["content"].strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
-        return f"Error generating response: {str(e)}"
+        return "I'm sorry, I couldn't process your request at this time."
 
 def fetch_ticker_price(ticker):
     """Fetch the latest price for the given ticker."""
