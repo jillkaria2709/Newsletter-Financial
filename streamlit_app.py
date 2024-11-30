@@ -16,10 +16,18 @@ client = chromadb.PersistentClient()
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["api_keys"]["alpha_vantage"]
 openai.api_key = st.secrets["api_keys"]["openai"]
-bespoke_key = st.secrets["api_keys"]["bespoke_labs"]
+bespoke_key = st.secrets["api_keys"].get("bespoke_labs", "")
 
-# Initialize Bespoke Labs Client
-bl = BespokeLabs(auth_token=bespoke_key)
+# Verify Bespoke API Key
+if not bespoke_key:
+    st.error("Bespoke API key is missing or invalid. Check your secrets file.")
+
+# Initialize Bespoke Labs Client with Error Handling
+try:
+    bl = BespokeLabs(auth_token=bespoke_key)
+except Exception as e:
+    st.error(f"Failed to initialize Bespoke Labs client: {e}")
+    bl = None
 
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
@@ -152,7 +160,7 @@ def generate_newsletter_and_factcheck():
         """
         
         # Use OpenAI ChatCompletion API
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
@@ -170,7 +178,10 @@ def generate_newsletter_and_factcheck():
         st.text(newsletter)
 
         # Fact-check the newsletter using Bespoke
-        st.subheader("Fact-Checking the Newsletter")
+        if not bl:
+            st.error("Bespoke Labs client is not initialized. Skipping fact-checking.")
+            return
+
         factcheck_response = bl.minicheck.factcheck.create(
             claim=newsletter,
             context=input_text
