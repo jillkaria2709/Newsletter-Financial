@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import openai
-from crewai import Agent, Crew
+from crewai import Crew, Agent
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
@@ -24,7 +24,7 @@ news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={a
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System")
+st.title("Alpha Vantage Multi-Agent System with CrewAI")
 
 # Sidebar options
 st.sidebar.header("Options")
@@ -172,7 +172,7 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving data: {e}")
 
-### Multi-Agent System ###
+### Multi-Agent System with Crew ###
 
 class CompanyAnalyst(Agent):
     def process(self, news_data):
@@ -217,13 +217,13 @@ class NewsletterGenerator(Agent):
 
         return {"newsletter": response.choices[0].message.content.strip()}
 
-multi_agent_system = Crew()
-multi_agent_system.add_agent("CompanyAnalyst", CompanyAnalyst())
-multi_agent_system.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
-multi_agent_system.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
-multi_agent_system.add_agent("NewsletterGenerator", NewsletterGenerator())
+crew = Crew()
+crew.add_agent("CompanyAnalyst", CompanyAnalyst())
+crew.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
+crew.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
+crew.add_agent("NewsletterGenerator", NewsletterGenerator())
 
-def generate_newsletter_with_agents():
+def generate_newsletter_with_crew():
     news_collection = client.get_or_create_collection("news_sentiment_data")
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
@@ -239,7 +239,7 @@ def generate_newsletter_with_agents():
             "RiskAnalysisAgent": news_data,
         }
 
-        results = multi_agent_system.run(inputs)
+        results = crew.run(inputs)
         st.subheader("Generated Newsletter")
         st.text(results["NewsletterGenerator"]["newsletter"])
 
@@ -256,4 +256,4 @@ elif option == "Load Ticker Trends Data":
 elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
-    generate_newsletter_with_agents()
+    generate_newsletter_with_crew()
