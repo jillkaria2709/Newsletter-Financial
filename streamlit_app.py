@@ -239,9 +239,13 @@ if st.button("Send"):
                 st.error(ticker_result["error"])
             else:
                 st.write(
-                    f"Ticker: {ticker_result['ticker']}, Date: {ticker_result['date']}, "
-                    f"Open: {ticker_result['open']}, High: {ticker_result['high']}, Low: {ticker_result['low']}, "
-                    f"Close: {ticker_result['close']}, Volume: {ticker_result['volume']}"
+                    f"**Ticker:** {ticker_result['ticker']}\n"
+                    f"**Date:** {ticker_result['date']}\n"
+                    f"**Open:** {ticker_result['open']}\n"
+                    f"**High:** {ticker_result['high']}\n"
+                    f"**Low:** {ticker_result['low']}\n"
+                    f"**Close:** {ticker_result['close']}\n"
+                    f"**Volume:** {ticker_result['volume']}\n"
                 )
         else:
             # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
@@ -252,7 +256,10 @@ if st.button("Send"):
             if rag_results:
                 # Combine RAG results into a context for GPT-4
                 st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
-                context = "\n".join(rag_results)
+                # Safely process rag_results into a string context
+                context = "\n".join(
+                    [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
+                )
                 prompt = (
                     f"You are a helpful assistant. Based on the user's query below, and the context from stored data, "
                     f"provide a well-framed and relevant response:\n\n"
