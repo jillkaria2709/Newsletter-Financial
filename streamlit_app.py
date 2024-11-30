@@ -36,19 +36,14 @@ option = st.sidebar.radio(
 ### Function Definitions for Data Loading and Retrieval ###
 
 def load_news_data():
-    # Create or access a collection for news data
     news_collection = client.get_or_create_collection("news_sentiment_data")
-
-    # Fetch data from the API
     try:
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
-
         if 'feed' in data:
             news_items = data['feed']
             for i, item in enumerate(news_items, start=1):
-                # Prepare the document and metadata
                 document = {
                     "id": str(i),
                     "title": item["title"],
@@ -69,12 +64,8 @@ def load_news_data():
                         for ticker in item.get("ticker_sentiment", [])
                     ],
                 }
-
-                # Convert lists in metadata to strings
                 topics_str = ", ".join(document["topics"])
                 ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
-
-                # Insert the document into the ChromaDB collection
                 news_collection.add(
                     ids=[document["id"]],
                     metadatas=[{
@@ -86,48 +77,35 @@ def load_news_data():
                     }],
                     documents=[json.dumps(document)]
                 )
-
             st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
         else:
             st.error("No news data found.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed: {e}")
     except Exception as e:
-        st.error(f"Unexpected error: {e}")
+        st.error(f"Error: {e}")
 
 def retrieve_news_data():
-    # Access the collection
     news_collection = client.get_or_create_collection("news_sentiment_data")
-
-    # Input ID for retrieval
     doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
-
     if st.button("Retrieve News"):
         try:
             results = news_collection.get(ids=[doc_id])
             if results['documents']:
-                for document, metadata in zip(results['documents'], results['metadatas']):
+                for document in results['documents']:
                     parsed_document = json.loads(document)
                     st.write("### News Data")
                     st.json(parsed_document)
             else:
-                st.warning("No data found for the given News ID.")
+                st.warning("No data found.")
         except Exception as e:
-            st.error(f"Error retrieving news data: {e}")
+            st.error(f"Error: {e}")
 
 def load_ticker_trends_data():
-    # Create or access a collection for ticker trends
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
     try:
-        # Fetch data from the API
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
-
-        # Validate data structure
         if "top_gainers" in data:
-            # Store decomposed data in ChromaDB
             ticker_collection.add(
                 ids=["top_gainers"],
                 metadatas=[{"type": "top_gainers"}],
@@ -143,25 +121,15 @@ def load_ticker_trends_data():
                 metadatas=[{"type": "most_actively_traded"}],
                 documents=[json.dumps(data["most_actively_traded"])],
             )
-
             st.success("Ticker trends data added to ChromaDB.")
         else:
             st.error("Invalid data format received from API.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed: {e}")
     except Exception as e:
-        st.error(f"Unexpected error: {e}")
+        st.error(f"Error: {e}")
 
 def retrieve_ticker_trends_data():
-    # Access the collection
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
-    st.write("Select the category of data to retrieve:")
-    data_type = st.radio(
-        "Data Type", ["Top Gainers", "Top Losers", "Most Actively Traded"]
-    )
-
-    # Retrieve and display the selected data type
+    data_type = st.radio("Data Type", ["Top Gainers", "Top Losers", "Most Actively Traded"])
     if st.button("Retrieve Data"):
         try:
             results = ticker_collection.get(ids=[data_type.lower().replace(" ", "_")])
@@ -170,53 +138,35 @@ def retrieve_ticker_trends_data():
             else:
                 st.warning("No data found.")
         except Exception as e:
-            st.error(f"Error retrieving data: {e}")
+            st.error(f"Error: {e}")
 
-### Crew, Tasks, and Process Definition ###
+### Crew and Task Implementation ###
 
 # Define agents
-researcher = Agent(
-    role="Researcher",
-    goal="Process news data",
-    backstory="An experienced researcher for data insights."
-)
-market_trends_analyst = Agent(
-    role="Market Analyst",
-    goal="Analyze market trends",
-    backstory="A market trends analyst with expertise in trading."
-)
-risk_analyst = Agent(
-    role="Risk Analyst",
-    goal="Identify risk insights",
-    backstory="An experienced analyst in risk assessment."
-)
-newsletter_writer = Agent(
-    role="Writer",
-    goal="Generate newsletters",
-    backstory="A writer focused on financial summaries."
-)
+researcher = Agent(role="Researcher", goal="Process news data", backstory="Experienced researcher.")
+market_analyst = Agent(role="Market Analyst", goal="Analyze trends", backstory="Market trends expert.")
+risk_analyst = Agent(role="Risk Analyst", goal="Identify risks", backstory="Experienced in risk analysis.")
+writer = Agent(role="Writer", goal="Generate newsletter", backstory="Expert in content creation.")
 
 # Define tasks
-news_task = Task(description="Extract news insights", agent=researcher, expected_output="News Data Insights")
-market_trends_task = Task(description="Analyze market trends", agent=market_trends_analyst, expected_output="Market Trends Insights")
-risk_analysis_task = Task(description="Perform risk analysis", agent=risk_analyst, expected_output="Risk Insights")
-newsletter_task = Task(description="Generate a newsletter", agent=newsletter_writer, expected_output="Final Newsletter")
+news_task = Task(description="Extract insights from news data", agent=researcher, expected_output="News Insights")
+market_trends_task = Task(description="Analyze market trends", agent=market_analyst, expected_output="Market Trends")
+risk_analysis_task = Task(description="Analyze risk data", agent=risk_analyst, expected_output="Risk Insights")
+newsletter_task = Task(description="Write the newsletter", agent=writer, expected_output="Newsletter")
 
-# Define crew
+# Define crew and process
 report_crew = Crew(
-    agents=[researcher, market_trends_analyst, risk_analyst, newsletter_writer],
+    agents=[researcher, market_analyst, risk_analyst, writer],
     tasks=[news_task, market_trends_task, risk_analysis_task, newsletter_task],
     process=Process.sequential
 )
 
 def generate_newsletter_with_tasks():
+    # Sequentially execute tasks
     result = report_crew.kickoff()
-
-    # Access output
-    crew_output: CrewOutput = result.output
-    newsletter = crew_output.get("Final Newsletter", "Newsletter generation failed.")
+    final_newsletter = result.tasks[-1].output  # Get the output of the final task
     st.subheader("Generated Newsletter")
-    st.text(newsletter)
+    st.text(final_newsletter)
 
 ### Main Logic ###
 if option == "Load News Data":
