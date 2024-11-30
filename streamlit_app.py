@@ -152,12 +152,15 @@ def generate_newsletter_with_rag():
     # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
     st.write("Executing: Extract insights from news data (Researcher)")
     news_results = researcher.execute_task("Extract insights from news data")
+    st.write("Researcher Response:", news_results)  # Print Researcher's response
 
     st.write("Executing: Analyze market trends (Market Analyst)")
     trends_results = market_analyst.execute_task("Analyze market trends")
+    st.write("Market Analyst Response:", trends_results)  # Print Market Analyst's response
 
     st.write("Executing: Analyze risk data (Risk Analyst)")
     risk_results = risk_analyst.execute_task("Analyze risk data")
+    st.write("Risk Analyst Response:", risk_results)  # Print Risk Analyst's response
 
     # Step 2: Combine insights for Writer Agent
     combined_data = [
@@ -170,6 +173,7 @@ def generate_newsletter_with_rag():
     st.write("Executing: Write the newsletter (Writer)")
     writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
+    st.write("Writer Response:", newsletter)  # Print Writer's response
 
     # Step 4: Display the generated newsletter
     if "Error" in newsletter:
