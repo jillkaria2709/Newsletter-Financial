@@ -8,8 +8,6 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from chromadb.config import Settings
-import httpx
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -21,8 +19,6 @@ openai.api_key = st.secrets["openai"]["api_keys"]
 bl = BespokeLabs(
     auth_token=st.secrets["bespoke_labs"]["api_key"]
 )
-http_client = httpx.Client(proxies=None)
-
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
