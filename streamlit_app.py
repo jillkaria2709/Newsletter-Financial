@@ -13,8 +13,8 @@ import chromadb
 client = chromadb.PersistentClient()
 
 # Access keys from secrets.toml
-alpha_vantage_key = st.secrets["alpha_vantage"]["api_keys"]
-openai.api_key = st.secrets["openai"]["api_keys"]
+alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
+openai.api_key = st.secrets["openai"]["api_key"]
 
 # Initialize Bespoke Labs
 bl = BespokeLabs(
