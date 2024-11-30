@@ -3,11 +3,11 @@ import requests
 import json
 import openai
 import os
-from bespokelabs import BespokeLabs
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
+from bespokelabs import BespokeLabs
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -15,8 +15,6 @@ client = chromadb.PersistentClient()
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
-
-# Initialize Bespoke Labs
 bl = BespokeLabs(
     auth_token=st.secrets["bespoke_labs"]["api_key"]
 )
