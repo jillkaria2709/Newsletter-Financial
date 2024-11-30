@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import openai
-from crewai import Crew, Agent
+from crewai import Crew, Process, Agent, Task, TaskOutput, CrewOutput
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
@@ -24,7 +24,7 @@ news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={a
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System with CrewAI")
+st.title("Alpha Vantage Multi-Agent System with CrewAI and Tasks")
 
 # Sidebar options
 st.sidebar.header("Options")
@@ -33,7 +33,7 @@ option = st.sidebar.radio(
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
 
-### Function Definitions ###
+### Function Definitions for Data Loading and Retrieval ###
 
 def load_news_data():
     # Create or access a collection for news data
@@ -172,82 +172,51 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving data: {e}")
 
-### Multi-Agent System with Crew ###
+### Crew, Tasks, and Process Definition ###
 
-class CompanyAnalyst(Agent):
-    def process(self, news_data):
-        company_insights = [item for item in news_data if "company" in item.get("topics", [])]
-        return {"company_insights": company_insights}
+# Define agents
+researcher = Agent(
+    role="Researcher",
+    goal="Process news data",
+    backstory="An experienced researcher for data insights."
+)
+market_trends_analyst = Agent(
+    role="Market Analyst",
+    goal="Analyze market trends",
+    backstory="A market trends analyst with expertise in trading."
+)
+risk_analyst = Agent(
+    role="Risk Analyst",
+    goal="Identify risk insights",
+    backstory="An experienced analyst in risk assessment."
+)
+newsletter_writer = Agent(
+    role="Writer",
+    goal="Generate newsletters",
+    backstory="A writer focused on financial summaries."
+)
 
-class MarketTrendsAnalyst(Agent):
-    def process(self, ticker_data):
-        trends = {
-            "gainers": ticker_data.get("top_gainers", []),
-            "losers": ticker_data.get("top_losers", []),
-            "active": ticker_data.get("most_actively_traded", []),
-        }
-        return {"market_trends": trends}
+# Define tasks
+news_task = Task(description="Extract news insights", agent=researcher, expected_output="News Data Insights")
+market_trends_task = Task(description="Analyze market trends", agent=market_trends_analyst, expected_output="Market Trends Insights")
+risk_analysis_task = Task(description="Perform risk analysis", agent=risk_analyst, expected_output="Risk Insights")
+newsletter_task = Task(description="Generate a newsletter", agent=newsletter_writer, expected_output="Final Newsletter")
 
-class RiskAnalysisAgent(Agent):
-    def process(self, news_data):
-        risks = [item for item in news_data if item.get("overall_sentiment_label", "neutral") == "negative"]
-        return {"risk_insights": risks}
+# Define crew
+report_crew = Crew(
+    agents=[researcher, market_trends_analyst, risk_analyst, newsletter_writer],
+    tasks=[news_task, market_trends_task, risk_analysis_task, newsletter_task],
+    process=Process.sequential
+)
 
-class NewsletterGenerator(Agent):
-    def process(self, inputs):
-        company_insights = inputs["CompanyAnalyst"]["company_insights"]
-        market_trends = inputs["MarketTrendsAnalyst"]["market_trends"]
-        risk_insights = inputs["RiskAnalysisAgent"]["risk_insights"]
+def generate_newsletter_with_tasks():
+    result = report_crew.kickoff()
 
-        input_text = f"""
-        Company Insights: {json.dumps(company_insights, indent=2)}
-        Market Trends: {json.dumps(market_trends, indent=2)}
-        Risk Insights: {json.dumps(risk_insights, indent=2)}
-        """
-
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
-            messages=[
-                {"role": "system", "content": "Generate a concise financial newsletter."},
-                {"role": "user", "content": f"Summarize the following data:\n{input_text}"}
-            ],
-            max_tokens=1500,
-            temperature=0.7
-        )
-
-        return {"newsletter": response.choices[0].message.content.strip()}
-
-# Initialize Crew with a name
-crew = Crew(name="AlphaVantageNewsletter")
-
-# Add agents as usual
-crew.add_agent("CompanyAnalyst", CompanyAnalyst())
-crew.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
-crew.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
-crew.add_agent("NewsletterGenerator", NewsletterGenerator())
-
-def generate_newsletter_with_crew():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
-    try:
-        news_results = news_collection.get()
-        news_data = [json.loads(doc) for doc in news_results["documents"]]
-        ticker_data = {data_type: json.loads(ticker_collection.get(ids=[data_type])["documents"][0])
-                       for data_type in ["top_gainers", "top_losers", "most_actively_traded"]}
-
-        inputs = {
-            "CompanyAnalyst": news_data,
-            "MarketTrendsAnalyst": ticker_data,
-            "RiskAnalysisAgent": news_data,
-        }
-
-        results = crew.run(inputs)
-        st.subheader("Generated Newsletter")
-        st.text(results["NewsletterGenerator"]["newsletter"])
-
-    except Exception as e:
-        st.error(f"Error generating newsletter: {e}")
+    # Access output
+    crew_output: CrewOutput = result.output
+    newsletter = crew_output.get("Final Newsletter", "Newsletter generation failed.")
+    st.subheader("Generated Newsletter")
+    st.text(newsletter)
 
 ### Main Logic ###
 if option == "Load News Data":
@@ -259,4 +228,4 @@ elif option == "Load Ticker Trends Data":
 elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
-    generate_newsletter_with_crew()
+    generate_newsletter_with_tasks()
