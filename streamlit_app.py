@@ -16,7 +16,7 @@ client = chromadb.PersistentClient()
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["api_keys"]["alpha_vantage"]
 openai.api_key = st.secrets["api_keys"]["openai"]
-bespoke_key = st.secrets["api_keys"].get("bespoke_labs", "")
+bespoke_key = st.secrets["api_keys"]["bespoke_labs"]
 
 # Verify Bespoke API Key
 if not bespoke_key:
