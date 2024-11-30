@@ -221,9 +221,12 @@ if st.button("Fetch and Store Trends Data"):
 
 if st.button("Generate Newsletter"):
     generate_newsletter_with_rag()
-
-### Chatbot UI ###
+### Chatbot UI with Short-Term Memory ###
 st.subheader("Chatbot")
+
+# Initialize session state for conversation history
+if "conversation_history" not in st.session_state:
+    st.session_state["conversation_history"] = []
 
 user_input = st.text_input("Ask me something:")
 
@@ -232,15 +235,16 @@ if st.button("Send"):
         st.write("Please enter a query.")
     else:
         user_input = user_input.strip()
-        
+
         # Step 1: Check if it's a ticker query
         if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
             st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
             ticker_result = fetch_ticker_price(user_input.upper())
             if "error" in ticker_result:
-                st.error(ticker_result["error"])
+                bot_response = f"Error: {ticker_result['error']}"
+                st.error(bot_response)
             else:
-                st.write(
+                bot_response = (
                     f"**Ticker:** {ticker_result['ticker']}\n"
                     f"**Date:** {ticker_result['date']}\n"
                     f"**Open:** {ticker_result['open']}\n"
@@ -249,6 +253,7 @@ if st.button("Send"):
                     f"**Close:** {ticker_result['close']}\n"
                     f"**Volume:** {ticker_result['volume']}\n"
                 )
+                st.write(bot_response)
         else:
             # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
             st.write("Searching in stored RAG data...")
@@ -257,23 +262,36 @@ if st.button("Send"):
 
             if rag_results:
                 # Combine RAG results into a context for GPT-4
-                # Safely process rag_results into a string context
+                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
                 context = "\n".join(
                     [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
                 )
+                # Include recent conversation history in the prompt
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                )
                 prompt = (
-                    f"You are a helpful assistant. Based on the user's query below, and the context from stored data, "
-                    f"provide a well-framed and relevant response:\n\n"
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
                     f"Query: {user_input}\n\n"
                     f"Context from RAG:\n{context}"
                 )
-                response = call_openai_gpt4(prompt)
-                st.write(response)
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
             else:
                 # Fallback to OpenAI GPT-4
-                prompt = (
-                    f"You are a helpful assistant. Based on the user's query below, provide a well-framed and "
-                    f"relevant response:\n\nQuery: {user_input}"
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
                 )
-                response = call_openai_gpt4(prompt)
-                st.write(response)
+                prompt = (
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
+                    f"Query: {user_input}"
+                )
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
+
+        # Step 3: Update Conversation History
+        st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
