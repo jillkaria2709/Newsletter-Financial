@@ -93,25 +93,27 @@ def retrieve_from_chromadb(collection_name, query, top_k=5):
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        response = openai.chat.completions.create(
+        print("Prompt Sent to GPT-4:", prompt)  # Log the prompt for debugging
+
+        response = openai.ChatCompletion.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        # Debugging: Print the full response structure
-        print(response)
+        # Log the full response for debugging
+        print("API Response:", response)
 
         # Ensure the response contains the expected structure
-        if 'choices' in response and response['choices']:
+        if 'choices' in response and len(response['choices']) > 0:
             content = response['choices'][0]['message']['content']
             return content.strip()
         else:
-            return "Error: No valid response from OpenAI."
+            return "Error: GPT-4 did not return any content."
     except Exception as e:
-        st.error(f"Error calling OpenAI GPT-4: {e}")
-        return "Error generating response."
+        print(f"Error during API call: {e}")
+        return f"Error generating response: {str(e)}"
 
 ### RAG-Agent Definition ###
 
