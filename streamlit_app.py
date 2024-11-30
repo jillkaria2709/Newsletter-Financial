@@ -27,7 +27,6 @@ st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
     collection = client.get_or_create_collection(collection_name)
-    collection.reset()  # Clear existing data
     for i, item in enumerate(data, start=1):
         collection.add(
             ids=[str(i)],
