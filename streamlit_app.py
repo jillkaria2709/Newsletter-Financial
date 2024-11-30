@@ -26,7 +26,31 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
-
+def validate_with_bespoke(newsletter, context):
+    """
+    Validate the newsletter using Bespoke Labs.
+    :param newsletter: The generated newsletter content (claim).
+    :param context: The context from RAG data (serialized JSON).
+    :return: Support probability and status message.
+    """
+    try:
+        st.write("Validating the newsletter with Bespoke Labs...")
+        factcheck_response = bl.minicheck.factcheck.create(
+            claim=newsletter,
+            context=json.dumps(context)
+        )
+        support_prob = factcheck_response.get("support_prob", "N/A")
+        if support_prob == "N/A":
+            return None, "Validation returned no support probability."
+        elif support_prob >= 0.8:
+            return support_prob, "The newsletter is highly supported by the context."
+        elif support_prob >= 0.5:
+            return support_prob, "The newsletter has partial support from the context."
+        else:
+            return support_prob, "The newsletter lacks sufficient support from the context."
+    except Exception as e:
+        return None, f"Error during validation: {e}"
+    
 def retrieve_from_multiple_rags(query, collections, top_k=5):
     """Search multiple collections for relevant RAG data."""
     results = []
@@ -181,7 +205,7 @@ tasks = [
 ### Newsletter Generation ###
 
 def generate_newsletter_with_rag():
-    """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
+    """Generate the newsletter using RAG and agents."""
     newsletter_content = []
 
     # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
@@ -209,30 +233,12 @@ def generate_newsletter_with_rag():
     # Step 4: Display the generated newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
+        return None, combined_data
     else:
         newsletter_content.append(f"## Writer's Newsletter\n{newsletter}\n")
         st.subheader("Generated Newsletter")
         st.markdown("\n".join(newsletter_content))
-
-    # Step 5: Validate the newsletter with Bespoke Labs
-    try:
-        st.write("Validating the newsletter with Bespoke Labs...")
-        factcheck_response = client.minicheck.factcheck.create(
-            claim=newsletter,
-            context=json.dumps(combined_data)  # Use combined RAG data as context
-        )
-        support_prob = factcheck_response.get("support_prob", "N/A")
-        st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
-        if support_prob == "N/A":
-            st.error("Bespoke Labs validation returned no support probability.")
-        elif support_prob >= 0.8:
-            st.success("The newsletter is highly supported by the context.")
-        elif support_prob >= 0.5:
-            st.warning("The newsletter has partial support from the context.")
-        else:
-            st.error("The newsletter lacks sufficient support from the context.")
-    except Exception as e:
-        st.error(f"Error during newsletter validation: {e}")
+        return newsletter, combined_data
 
 ### Main Page Buttons ###
 if st.button("Fetch and Store News Data"):
@@ -241,8 +247,25 @@ if st.button("Fetch and Store News Data"):
 if st.button("Fetch and Store Trends Data"):
     fetch_and_update_ticker_trends_data()
 
+# Main Streamlit Buttons
 if st.button("Generate Newsletter"):
-    generate_newsletter_with_rag()
+    newsletter, rag_context = generate_newsletter_with_rag()
+
+if st.button("Validate Newsletter with Bespoke Labs"):
+    if "newsletter" not in locals() or newsletter is None:
+        st.error("Please generate the newsletter first.")
+    else:
+        support_prob, message = validate_with_bespoke(newsletter, rag_context)
+        if support_prob is not None:
+            st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
+            if support_prob >= 0.8:
+                st.success(message)
+            elif support_prob >= 0.5:
+                st.warning(message)
+            else:
+                st.error(message)
+        else:
+            st.error(message)
 ### Chatbot UI with Short-Term Memory ###
 st.subheader("Chatbot")
 
