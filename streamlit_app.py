@@ -14,12 +14,12 @@ from chromadb.config import Settings
 client = chromadb.PersistentClient()
 
 # Access keys from secrets.toml
-alpha_vantage_key = st.secrets["api_keys"]["alpha_vantage"]
-openai.api_key = st.secrets["api_keys"]["openai"]
+alpha_vantage_key = st.secrets["alpha_vantage"]["api_keys"]
+openai.api_key = st.secrets["openai"]["api_keys"]
 bl = BespokeLabs(
-    # This is the default and can be omitted
-    auth_token=os.environ.get("bespoke-f7452072ae299377b684bd387baab73b90b02bd0f9b324dbef25d9f7cabd2946"),
+    auth_token=st.secrets["bespoke_labs"]["api_keys"]
 )
+
 
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
