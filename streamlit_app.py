@@ -2,9 +2,13 @@ import streamlit as st
 import requests
 import json
 import openai
+from crewai import Agent, System
+
+# Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
+
 import chromadb
 from chromadb.config import Settings
 
@@ -20,7 +24,7 @@ news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={a
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage RAG System")
+st.title("Alpha Vantage Multi-Agent System")
 
 # Sidebar options
 st.sidebar.header("Options")
@@ -29,7 +33,8 @@ option = st.sidebar.radio(
     ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
 )
 
-### Function to Load News Data into ChromaDB ###
+### Function Definitions ###
+
 def load_news_data():
     # Create or access a collection for news data
     news_collection = client.get_or_create_collection("news_sentiment_data")
@@ -64,7 +69,7 @@ def load_news_data():
                         for ticker in item.get("ticker_sentiment", [])
                     ],
                 }
-                
+
                 # Convert lists in metadata to strings
                 topics_str = ", ".join(document["topics"])
                 ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
@@ -90,7 +95,6 @@ def load_news_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve News Data ###
 def retrieve_news_data():
     # Access the collection
     news_collection = client.get_or_create_collection("news_sentiment_data")
@@ -111,7 +115,6 @@ def retrieve_news_data():
         except Exception as e:
             st.error(f"Error retrieving news data: {e}")
 
-### Function to Load Ticker Trends Data ###
 def load_ticker_trends_data():
     # Create or access a collection for ticker trends
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
@@ -149,7 +152,6 @@ def load_ticker_trends_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve Ticker Trends Data ###
 def retrieve_ticker_trends_data():
     # Access the collection
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
@@ -170,59 +172,81 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving data: {e}")
 
-def generate_newsletter():
-    # Access collections
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-    
-    try:
-        # Retrieve all documents
-        news_results = news_collection.get()
-        news_data = [json.loads(doc) for doc in news_results["documents"]]
-        
-        # Retrieve ticker trends
-        ticker_data = {}
-        for data_type in ["top_gainers", "top_losers", "most_actively_traded"]:
-            results = ticker_collection.get(ids=[data_type])
-            ticker_data[data_type] = json.loads(results["documents"][0])
-        
-        # Combine data
-        combined_data = {
-            "news": news_data[:10],  # Limit news data for summarization
-            "tickers": ticker_data
+### Multi-Agent System ###
+
+class CompanyAnalyst(Agent):
+    def process(self, news_data):
+        company_insights = [item for item in news_data if "company" in item.get("topics", [])]
+        return {"company_insights": company_insights}
+
+class MarketTrendsAnalyst(Agent):
+    def process(self, ticker_data):
+        trends = {
+            "gainers": ticker_data.get("top_gainers", []),
+            "losers": ticker_data.get("top_losers", []),
+            "active": ticker_data.get("most_actively_traded", []),
         }
-        
-        # Prepare data for summarization
+        return {"market_trends": trends}
+
+class RiskAnalysisAgent(Agent):
+    def process(self, news_data):
+        risks = [item for item in news_data if item.get("overall_sentiment_label", "neutral") == "negative"]
+        return {"risk_insights": risks}
+
+class NewsletterGenerator(Agent):
+    def process(self, inputs):
+        company_insights = inputs["CompanyAnalyst"]["company_insights"]
+        market_trends = inputs["MarketTrendsAnalyst"]["market_trends"]
+        risk_insights = inputs["RiskAnalysisAgent"]["risk_insights"]
+
         input_text = f"""
-        News Data: {json.dumps(combined_data['news'], indent=2)}
-        Ticker Trends:
-        Top Gainers: {json.dumps(combined_data['tickers']['top_gainers'], indent=2)}
-        Top Losers: {json.dumps(combined_data['tickers']['top_losers'], indent=2)}
-        Most Actively Traded: {json.dumps(combined_data['tickers']['most_actively_traded'], indent=2)}
+        Company Insights: {json.dumps(company_insights, indent=2)}
+        Market Trends: {json.dumps(market_trends, indent=2)}
+        Risk Insights: {json.dumps(risk_insights, indent=2)}
         """
-        
-        # Use OpenAI ChatCompletion API
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",  # Use the model suitable for your needs
+
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
-                {"role": "user", "content": f"Summarize the following RAG data into a concise newsletter:\n{input_text}"}
+                {"role": "system", "content": "Generate a concise financial newsletter."},
+                {"role": "user", "content": f"Summarize the following data:\n{input_text}"}
             ],
             max_tokens=1500,
             temperature=0.7
         )
-        
-        # Access the response correctly
-        newsletter = response.choices[0].message.content.strip()  # Correct access for ChatCompletionMessage
 
-        # Display the newsletter
+        return {"newsletter": response.choices[0].message.content.strip()}
+
+multi_agent_system = System()
+multi_agent_system.add_agent("CompanyAnalyst", CompanyAnalyst())
+multi_agent_system.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
+multi_agent_system.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
+multi_agent_system.add_agent("NewsletterGenerator", NewsletterGenerator())
+
+def generate_newsletter_with_agents():
+    news_collection = client.get_or_create_collection("news_sentiment_data")
+    ticker_collection = client.get_or_create_collection("ticker_trends_data")
+
+    try:
+        news_results = news_collection.get()
+        news_data = [json.loads(doc) for doc in news_results["documents"]]
+        ticker_data = {data_type: json.loads(ticker_collection.get(ids=[data_type])["documents"][0])
+                       for data_type in ["top_gainers", "top_losers", "most_actively_traded"]}
+
+        inputs = {
+            "CompanyAnalyst": news_data,
+            "MarketTrendsAnalyst": ticker_data,
+            "RiskAnalysisAgent": news_data,
+        }
+
+        results = multi_agent_system.run(inputs)
         st.subheader("Generated Newsletter")
-        st.text(newsletter)
-        
+        st.text(results["NewsletterGenerator"]["newsletter"])
+
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
-# Main Logic
+### Main Logic ###
 if option == "Load News Data":
     load_news_data()
 elif option == "Retrieve News Data":
@@ -232,4 +256,4 @@ elif option == "Load Ticker Trends Data":
 elif option == "Retrieve Ticker Trends Data":
     retrieve_ticker_trends_data()
 elif option == "Generate Newsletter":
-    generate_newsletter()
+    generate_newsletter_with_agents()
