@@ -2,12 +2,13 @@ import streamlit as st
 import requests
 import json
 import openai
+import chromadb
+from chromadb.config import Settings
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-import chromadb
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -22,13 +23,6 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 
 # Streamlit App Title
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
-
-# Sidebar options
-st.sidebar.header("Options")
-option = st.sidebar.radio(
-    "Choose an action:",
-    ["Update News Data", "Update Ticker Trends Data", "Generate Newsletter"]
-)
 
 ### Helper Functions ###
 
@@ -49,6 +43,7 @@ def fetch_and_update_news_data():
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
+        st.write("News API Response:", data)  # Print the API response
         if 'feed' in data:
             update_chromadb("news_sentiment_data", data['feed'])
             st.success("News data updated in ChromaDB.")
@@ -63,6 +58,7 @@ def fetch_and_update_ticker_trends_data():
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
+        st.write("Ticker Trends API Response:", data)  # Print the API response
         if "top_gainers" in data:
             combined_data = [
                 {"type": "top_gainers", "data": data["top_gainers"]},
@@ -162,10 +158,12 @@ def generate_newsletter_with_rag():
     st.subheader("Generated Newsletter")
     st.markdown("\n".join(newsletter_content))
 
-### Main Logic ###
-if option == "Update News Data":
+### Main Page Buttons ###
+if st.button("Fetch and Store News Data"):
     fetch_and_update_news_data()
-elif option == "Update Ticker Trends Data":
+
+if st.button("Fetch and Store Trends Data"):
     fetch_and_update_ticker_trends_data()
-elif option == "Generate Newsletter":
+
+if st.button("Generate Newsletter"):
     generate_newsletter_with_rag()
