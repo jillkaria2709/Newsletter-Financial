@@ -94,14 +94,15 @@ def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
         # Correctly access the response content
-        return response['choices'][0]['message']['content']
+        content = response['choices'][0]['message']['content']
+        return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "Error generating response."
@@ -152,7 +153,10 @@ def generate_newsletter_with_rag():
     for task in tasks:
         st.write(f"Executing: {task['description']} with {task['agent'].role}")
         result = task['agent'].execute_task(task['description'])
-        newsletter_content.append(f"## {task['agent'].role}\n{result}\n")
+        if "Error" in result:
+            st.error(f"Failed to complete task: {task['description']}")
+        else:
+            newsletter_content.append(f"## {task['agent'].role}\n{result}\n")
     st.subheader("Generated Newsletter")
     st.markdown("\n".join(newsletter_content))
 
