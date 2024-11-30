@@ -3,6 +3,7 @@ import requests
 import json
 import openai
 from crewai import Crew, Process, Agent, Task
+from langchain.chat_models import ChatOpenAI
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
@@ -18,6 +19,9 @@ client = chromadb.PersistentClient()
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
+
+# Initialize ChatOpenAI Model
+openai_llm = ChatOpenAI(model="gpt-4", openai_api_key=openai.api_key)
 
 # API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
@@ -140,21 +144,18 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error: {e}")
 
-### Crew and Task Implementation ###
+### Crew, Agents, and Tasks ###
 
-# Define agents
-researcher = Agent(role="Researcher", goal="Process news data", backstory="Experienced researcher.")
-market_analyst = Agent(role="Market Analyst", goal="Analyze trends", backstory="Market trends expert.")
-risk_analyst = Agent(role="Risk Analyst", goal="Identify risks", backstory="Experienced in risk analysis.")
-writer = Agent(role="Writer", goal="Generate newsletter", backstory="Expert in content creation.")
+researcher = Agent(role="Researcher", goal="Process news data", backstory="Experienced researcher.", llm=openai_llm)
+market_analyst = Agent(role="Market Analyst", goal="Analyze trends", backstory="Market trends expert.", llm=openai_llm)
+risk_analyst = Agent(role="Risk Analyst", goal="Identify risks", backstory="Experienced in risk analysis.", llm=openai_llm)
+writer = Agent(role="Writer", goal="Generate newsletter", backstory="Expert in content creation.", llm=openai_llm)
 
-# Define tasks
-news_task = Task(description="Extract insights from news data", agent=researcher, expected_output="News Insights")
-market_trends_task = Task(description="Analyze market trends", agent=market_analyst, expected_output="Market Trends")
-risk_analysis_task = Task(description="Analyze risk data", agent=risk_analyst, expected_output="Risk Insights")
-newsletter_task = Task(description="Write the newsletter", agent=writer, expected_output="Newsletter")
+news_task = Task(description="Extract insights from news data", agent=researcher)
+market_trends_task = Task(description="Analyze market trends", agent=market_analyst)
+risk_analysis_task = Task(description="Analyze risk data", agent=risk_analyst)
+newsletter_task = Task(description="Write the newsletter", agent=writer)
 
-# Define crew and process
 report_crew = Crew(
     agents=[researcher, market_analyst, risk_analyst, writer],
     tasks=[news_task, market_trends_task, risk_analysis_task, newsletter_task],
@@ -162,11 +163,10 @@ report_crew = Crew(
 )
 
 def generate_newsletter_with_tasks():
-    # Sequentially execute tasks
     result = report_crew.kickoff()
-    final_newsletter = result.tasks[-1].output  # Get the output of the final task
+    newsletter = result.tasks[-1].output  # Get the final task's output
     st.subheader("Generated Newsletter")
-    st.text(final_newsletter)
+    st.text(newsletter)
 
 ### Main Logic ###
 if option == "Load News Data":
