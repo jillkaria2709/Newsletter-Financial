@@ -222,24 +222,36 @@ st.subheader("Chatbot")
 user_input = st.text_input("Ask me something:")
 
 if st.button("Send"):
-    if user_input.strip().lower() == "newsletter":
-        # Respond with newsletter information
-        st.write("This is a daily financial newsletter providing market trends and stock updates.")
-    elif len(user_input.strip()) > 0:
-        # Treat any non-empty input as a potential ticker
-        try:
-            ticker = user_input.strip().upper()
-            result = fetch_ticker_price(ticker)
-            if "error" in result:
-                st.error(result["error"])
+    if len(user_input.strip()) == 0:
+        st.write("Please enter a query.")
+    else:
+        user_input = user_input.strip()
+        
+        # Step 1: Check if it's a ticker query
+        if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
+            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
+            ticker_result = fetch_ticker_price(user_input.upper())
+            if "error" in ticker_result:
+                st.error(ticker_result["error"])
             else:
                 st.write(
-                    f"Ticker: {result['ticker']}, Date: {result['date']}, "
-                    f"Open: {result['open']}, High: {result['high']}, Low: {result['low']}, "
-                    f"Close: {result['close']}, Volume: {result['volume']}"
+                    f"Ticker: {ticker_result['ticker']}, Date: {ticker_result['date']}, "
+                    f"Open: {ticker_result['open']}, High: {ticker_result['high']}, Low: {ticker_result['low']}, "
+                    f"Close: {ticker_result['close']}, Volume: {ticker_result['volume']}"
                 )
-        except Exception as e:
-            st.error(f"Error processing ticker: {e}")
-    else:
-        # Fallback response for empty input
-        st.write("I can answer about the newsletter or fetch stock prices. Try entering a stock ticker like 'IBM' or type 'newsletter'.")
+        else:
+            # Step 2: Check in RAG (ChromaDB)
+            st.write("Searching in stored RAG data...")
+            rag_collections = ["news_sentiment_data", "ticker_trends_data"]
+            rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
+
+            if rag_results:
+                # Display RAG results
+                st.write("Found the following information in stored data:")
+                for result in rag_results:
+                    st.write(result)
+            else:
+                # Step 3: Fallback to OpenAI
+                st.write("Not found in today's data. Searching online...")
+                fallback_response = call_openai_gpt4(user_input)
+                st.write(f"Here is some information I found online:\n\n{fallback_response}")
