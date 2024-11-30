@@ -22,14 +22,10 @@ bespoke_key = st.secrets["api_keys"]["bespoke_labs"]
 if not bespoke_key:
     st.error("Bespoke API key is missing or invalid. Check your secrets file.")
 
-# Initialize Bespoke Labs Client with Error Handling
+# Initialize Bespoke Labs Client
 try:
-    bl = BespokeLabs(
-        auth_token=os.environ.get(bespoke_key)
-        )
-except TypeError as te:
-    st.error(f"Failed to initialize Bespoke Labs client due to argument issues: {te}")
-    bl = None
+    bl = BespokeLabs(auth_token=bespoke_key)  # Directly pass the API key
+    st.success("Bespoke Labs client initialized successfully.")
 except Exception as e:
     st.error(f"Failed to initialize Bespoke Labs client: {e}")
     bl = None
@@ -165,7 +161,7 @@ def generate_newsletter_and_factcheck():
         """
         
         # Use OpenAI ChatCompletion API
-        response = openai.chat.completions.create(
+        response = openai.ChatCompletion.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
