@@ -95,7 +95,7 @@ def call_openai_gpt4(prompt):
     try:
         print("Prompt Sent to GPT-4:", prompt)  # Log the prompt for debugging
 
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
