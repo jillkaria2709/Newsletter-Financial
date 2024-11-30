@@ -161,7 +161,7 @@ def generate_newsletter_and_factcheck():
         """
         
         # Use OpenAI ChatCompletion API
-        response = openai.ChatCompletion.create(
+        response = openai.chat.completions.create(
             model="gpt-3.5-turbo",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
