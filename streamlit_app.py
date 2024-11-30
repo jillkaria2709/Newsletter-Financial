@@ -100,9 +100,15 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correctly access the response content
-        content = response['choices'][0]['message']['content']
-        return content.strip()
+        # Debugging: Print the full response structure
+        print(response)
+
+        # Ensure the response contains the expected structure
+        if 'choices' in response and response['choices']:
+            content = response['choices'][0]['message']['content']
+            return content.strip()
+        else:
+            return "Error: No valid response from OpenAI."
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "Error generating response."
