@@ -217,7 +217,10 @@ class NewsletterGenerator(Agent):
 
         return {"newsletter": response.choices[0].message.content.strip()}
 
-crew = Crew()
+# Initialize Crew with a name
+crew = Crew(name="AlphaVantageNewsletter")
+
+# Add agents as usual
 crew.add_agent("CompanyAnalyst", CompanyAnalyst())
 crew.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
 crew.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
