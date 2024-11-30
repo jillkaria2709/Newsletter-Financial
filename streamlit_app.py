@@ -92,9 +92,7 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Debugging: Log the full response
-        st.write("GPT-4 API Response (Raw):", response)
-
+        
         # Access the content attribute directly
         content = response.choices[0].message.content
         return content.strip()
