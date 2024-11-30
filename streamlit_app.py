@@ -100,7 +100,9 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        return response.choices[0].message["content"].strip()
+        # Correctly access the content property
+        content = response['choices'][0]['message']['content']
+        return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
