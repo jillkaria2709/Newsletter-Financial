@@ -31,11 +31,10 @@ option = st.sidebar.radio(
 
 ### Define Agents ###
 
-# Agent to load and store news data
 class NewsDataAgent(Agent):
     def handle(self):
-        news_collection = client.get_or_create_collection("news_sentiment_data")
         try:
+            news_collection = client.get_or_create_collection("news_sentiment_data")
             response = requests.get(news_url)
             response.raise_for_status()
             data = response.json()
@@ -62,26 +61,21 @@ class NewsDataAgent(Agent):
                             for ticker in item.get("ticker_sentiment", [])
                         ],
                     }
-                    topics_str = ", ".join(document["topics"])
-                    ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
-
                     news_collection.add(
                         ids=[document["id"]],
                         metadatas=[{
                             "source": document["source"],
                             "time_published": document["time_published"],
-                            "topics": topics_str,
-                            "overall_sentiment": document["overall_sentiment_label"],
-                            "ticker_sentiments": ticker_sentiments_str,
+                            "topics": ", ".join(document["topics"]),
                         }],
-                        documents=[json.dumps(document)]
+                        documents=[json.dumps(document)],
                     )
                 return {"status": "News data loaded successfully"}
             return {"status": "No news data found"}
         except requests.exceptions.RequestException as e:
-            return {"error": f"API call failed: {e}"}
+            return {"error": f"API request failed: {e}"}
         except Exception as e:
-            return {"error": f"Unexpected error: {e}"}
+            return {"error": f"Error in NewsDataAgent: {str(e)}"}
 
 
 # Agent to load and store ticker trends data
