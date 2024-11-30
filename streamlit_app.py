@@ -36,8 +36,8 @@ def validate_with_bespoke(newsletter, context):
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
         factcheck_response = bl.minicheck.factcheck.create(
-            claim="claim",
-            context="content"
+            claim=newsletter,
+            context=json.dumps(context)
         )
         support_prob = factcheck_response.get("support_prob", "N/A")
         if support_prob == "N/A":
