@@ -17,17 +17,9 @@ client = chromadb.PersistentClient()
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_keys"]
 openai.api_key = st.secrets["openai"]["api_keys"]
 # Access keys from secrets.toml
-alpha_vantage_key = st.secrets["alpha_vantage"]["api_keys"]
-openai.api_key = st.secrets["openai"]["api_keys"]
-bespoke_key = st.secrets["bespoke_labs"]["api_keys"]
-
-# Initialize Bespoke Labs client
-try:
-    bl = BespokeLabs(auth_token=bespoke_key)
-    st.success("Bespoke Labs client initialized successfully.")
-except Exception as e:
-    st.error(f"Failed to initialize Bespoke Labs client: {e}")
-    bl = None
+bl = BespokeLabs(
+    auth_token=st.secrets["bespoke_labs"]["api_key"]
+)
 
 
 # API URLs
