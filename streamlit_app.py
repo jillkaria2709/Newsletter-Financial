@@ -222,20 +222,24 @@ st.subheader("Chatbot")
 user_input = st.text_input("Ask me something:")
 
 if st.button("Send"):
-    if "newsletter" in user_input.lower():
+    if user_input.strip().lower() == "newsletter":
         # Respond with newsletter information
         st.write("This is a daily financial newsletter providing market trends and stock updates.")
-    elif "ticker" in user_input.lower():
-        # Fetch the ticker price
+    elif len(user_input.strip()) > 0:
+        # Treat any non-empty input as a potential ticker
         try:
-            ticker = user_input.split(" ")[-1].strip()
+            ticker = user_input.strip().upper()
             result = fetch_ticker_price(ticker)
             if "error" in result:
                 st.error(result["error"])
             else:
-                st.write(f"Ticker: {result['ticker']}, Date: {result['date']}, Close: {result['close']}")
+                st.write(
+                    f"Ticker: {result['ticker']}, Date: {result['date']}, "
+                    f"Open: {result['open']}, High: {result['high']}, Low: {result['low']}, "
+                    f"Close: {result['close']}, Volume: {result['volume']}"
+                )
         except Exception as e:
             st.error(f"Error processing ticker: {e}")
     else:
-        # Fallback response
-        st.write("I can answer about the newsletter or fetch stock prices. Try asking about a ticker!")
+        # Fallback response for empty input
+        st.write("I can answer about the newsletter or fetch stock prices. Try entering a stock ticker like 'IBM' or type 'newsletter'.")
