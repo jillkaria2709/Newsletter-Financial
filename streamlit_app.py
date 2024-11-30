@@ -2,234 +2,223 @@ import streamlit as st
 import requests
 import json
 import openai
+from crewai import Agent,Task, Crew
 __import__('pysqlite3')
-import sys
+import sys,os
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from chromadb.config import Settings
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
 
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
-openai.api_key = st.secrets["openai"]["api_key"]
+openai_api_key = st.secrets["openai"]["api_key"]
+
+# Set OpenAI API key for the library
+openai.api_key = openai_api_key
 
 # API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage RAG System")
+st.title("Alpha Vantage Multi-Agent RAG System")
 
 # Sidebar options
 st.sidebar.header("Options")
 option = st.sidebar.radio(
     "Choose an action:",
-    ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
+    ["Generate Newsletter"]
 )
 
-### Function to Load News Data into ChromaDB ###
-def load_news_data():
-    # Create or access a collection for news data
-    news_collection = client.get_or_create_collection("news_sentiment_data")
+### Define Agents ###
 
-    # Fetch data from the API
-    try:
-        response = requests.get(news_url)
-        response.raise_for_status()
-        data = response.json()
+# Agent to load and store news data
+class NewsDataAgent(Agent):
+    def handle(self):
+        news_collection = client.get_or_create_collection("news_sentiment_data")
+        try:
+            response = requests.get(news_url)
+            response.raise_for_status()
+            data = response.json()
 
-        if 'feed' in data:
-            news_items = data['feed']
-            for i, item in enumerate(news_items, start=1):
-                # Prepare the document and metadata
-                document = {
-                    "id": str(i),
-                    "title": item["title"],
-                    "url": item["url"],
-                    "time_published": item["time_published"],
-                    "source": item["source"],
-                    "summary": item.get("summary", "N/A"),
-                    "topics": [topic["topic"] for topic in item.get("topics", [])],
-                    "overall_sentiment_label": item.get("overall_sentiment_label", "N/A"),
-                    "overall_sentiment_score": item.get("overall_sentiment_score", "N/A"),
-                    "ticker_sentiments": [
-                        {
-                            "ticker": ticker["ticker"],
-                            "relevance_score": ticker["relevance_score"],
-                            "ticker_sentiment_label": ticker["ticker_sentiment_label"],
-                            "ticker_sentiment_score": ticker["ticker_sentiment_score"],
-                        }
-                        for ticker in item.get("ticker_sentiment", [])
-                    ],
-                }
-                
-                # Convert lists in metadata to strings
-                topics_str = ", ".join(document["topics"])
-                ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
+            if "feed" in data:
+                for i, item in enumerate(data["feed"], start=1):
+                    document = {
+                        "id": str(i),
+                        "title": item["title"],
+                        "url": item["url"],
+                        "time_published": item["time_published"],
+                        "source": item["source"],
+                        "summary": item.get("summary", "N/A"),
+                        "topics": [topic["topic"] for topic in item.get("topics", [])],
+                        "overall_sentiment_label": item.get("overall_sentiment_label", "N/A"),
+                        "overall_sentiment_score": item.get("overall_sentiment_score", "N/A"),
+                        "ticker_sentiments": [
+                            {
+                                "ticker": ticker["ticker"],
+                                "relevance_score": ticker["relevance_score"],
+                                "ticker_sentiment_label": ticker["ticker_sentiment_label"],
+                                "ticker_sentiment_score": ticker["ticker_sentiment_score"],
+                            }
+                            for ticker in item.get("ticker_sentiment", [])
+                        ],
+                    }
+                    topics_str = ", ".join(document["topics"])
+                    ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
 
-                # Insert the document into the ChromaDB collection
-                news_collection.add(
-                    ids=[document["id"]],
-                    metadatas=[{
-                        "source": document["source"],
-                        "time_published": document["time_published"],
-                        "topics": topics_str,
-                        "overall_sentiment": document["overall_sentiment_label"],
-                        "ticker_sentiments": ticker_sentiments_str,
-                    }],
-                    documents=[json.dumps(document)]
+                    news_collection.add(
+                        ids=[document["id"]],
+                        metadatas=[{
+                            "source": document["source"],
+                            "time_published": document["time_published"],
+                            "topics": topics_str,
+                            "overall_sentiment": document["overall_sentiment_label"],
+                            "ticker_sentiments": ticker_sentiments_str,
+                        }],
+                        documents=[json.dumps(document)]
+                    )
+                return {"status": "News data loaded successfully"}
+            return {"status": "No news data found"}
+        except requests.exceptions.RequestException as e:
+            return {"error": f"API call failed: {e}"}
+        except Exception as e:
+            return {"error": f"Unexpected error: {e}"}
+
+
+# Agent to load and store ticker trends data
+class TickerTrendsAgent(Agent):
+    def handle(self):
+        ticker_collection = client.get_or_create_collection("ticker_trends_data")
+        try:
+            response = requests.get(tickers_url)
+            response.raise_for_status()
+            data = response.json()
+
+            if "top_gainers" in data:
+                ticker_collection.add(
+                    ids=["top_gainers"],
+                    metadatas=[{"type": "top_gainers"}],
+                    documents=[json.dumps(data["top_gainers"])],
                 )
-
-            st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
-        else:
-            st.error("No news data found.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed: {e}")
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
-
-### Function to Retrieve News Data ###
-def retrieve_news_data():
-    # Access the collection
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-
-    # Input ID for retrieval
-    doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
-
-    if st.button("Retrieve News"):
-        try:
-            results = news_collection.get(ids=[doc_id])
-            if results['documents']:
-                for document, metadata in zip(results['documents'], results['metadatas']):
-                    parsed_document = json.loads(document)
-                    st.write("### News Data")
-                    st.json(parsed_document)
-            else:
-                st.warning("No data found for the given News ID.")
+                ticker_collection.add(
+                    ids=["top_losers"],
+                    metadatas=[{"type": "top_losers"}],
+                    documents=[json.dumps(data["top_losers"])],
+                )
+                ticker_collection.add(
+                    ids=["most_actively_traded"],
+                    metadatas=[{"type": "most_actively_traded"}],
+                    documents=[json.dumps(data["most_actively_traded"])],
+                )
+                return {"status": "Ticker trends data loaded successfully"}
+            return {"status": "No ticker trends data found"}
+        except requests.exceptions.RequestException as e:
+            return {"error": f"API call failed: {e}"}
         except Exception as e:
-            st.error(f"Error retrieving news data: {e}")
+            return {"error": f"Unexpected error: {e}"}
 
-### Function to Load Ticker Trends Data ###
-def load_ticker_trends_data():
-    # Create or access a collection for ticker trends
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
 
-    try:
-        # Fetch data from the API
-        response = requests.get(tickers_url)
-        response.raise_for_status()
-        data = response.json()
-
-        # Validate data structure
-        if "top_gainers" in data:
-            # Store decomposed data in ChromaDB
-            ticker_collection.add(
-                ids=["top_gainers"],
-                metadatas=[{"type": "top_gainers"}],
-                documents=[json.dumps(data["top_gainers"])],
-            )
-            ticker_collection.add(
-                ids=["top_losers"],
-                metadatas=[{"type": "top_losers"}],
-                documents=[json.dumps(data["top_losers"])],
-            )
-            ticker_collection.add(
-                ids=["most_actively_traded"],
-                metadatas=[{"type": "most_actively_traded"}],
-                documents=[json.dumps(data["most_actively_traded"])],
-            )
-
-            st.success("Ticker trends data added to ChromaDB.")
-        else:
-            st.error("Invalid data format received from API.")
-    except requests.exceptions.RequestException as e:
-        st.error(f"API call failed: {e}")
-    except Exception as e:
-        st.error(f"Unexpected error: {e}")
-
-### Function to Retrieve Ticker Trends Data ###
-def retrieve_ticker_trends_data():
-    # Access the collection
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-
-    st.write("Select the category of data to retrieve:")
-    data_type = st.radio(
-        "Data Type", ["Top Gainers", "Top Losers", "Most Actively Traded"]
-    )
-
-    # Retrieve and display the selected data type
-    if st.button("Retrieve Data"):
+# Agent to retrieve data from ChromaDB and summarize
+class DataSummarizationAgent(Agent):
+    def handle(self, inputs):
+        news_collection = client.get_or_create_collection("news_sentiment_data")
+        ticker_collection = client.get_or_create_collection("ticker_trends_data")
         try:
-            results = ticker_collection.get(ids=[data_type.lower().replace(" ", "_")])
-            if results["documents"]:
-                st.json(json.loads(results["documents"][0]))
-            else:
-                st.warning("No data found.")
-        except Exception as e:
-            st.error(f"Error retrieving data: {e}")
+            news_results = news_collection.get()
+            news_data = [json.loads(doc) for doc in news_results["documents"]]
+            ticker_data = {}
+            for data_type in ["top_gainers", "top_losers", "most_actively_traded"]:
+                results = ticker_collection.get(ids=[data_type])
+                ticker_data[data_type] = json.loads(results["documents"][0])
 
-def generate_newsletter():
-    # Access collections
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-    
-    try:
-        # Retrieve all documents
-        news_results = news_collection.get()
-        news_data = [json.loads(doc) for doc in news_results["documents"]]
-        
-        # Retrieve ticker trends
-        ticker_data = {}
-        for data_type in ["top_gainers", "top_losers", "most_actively_traded"]:
-            results = ticker_collection.get(ids=[data_type])
-            ticker_data[data_type] = json.loads(results["documents"][0])
-        
-        # Combine data
-        combined_data = {
-            "news": news_data[:10],  # Limit news data for summarization
-            "tickers": ticker_data
-        }
-        
-        # Prepare data for summarization
+            combined_data = {
+                "news": news_data[:10],
+                "tickers": ticker_data
+            }
+            return {"combined_data": combined_data}
+        except Exception as e:
+            return {"error": f"Error retrieving data: {e}"}
+
+
+# Agent to generate a newsletter
+class NewsletterAgent(Agent):
+    def handle(self, inputs):
+        combined_data = inputs.get("combined_data", {})
+        news_data = combined_data.get("news", [])
+        tickers = combined_data.get("tickers", {})
         input_text = f"""
-        News Data: {json.dumps(combined_data['news'], indent=2)}
+        News Data: {json.dumps(news_data, indent=2)}
         Ticker Trends:
-        Top Gainers: {json.dumps(combined_data['tickers']['top_gainers'], indent=2)}
-        Top Losers: {json.dumps(combined_data['tickers']['top_losers'], indent=2)}
-        Most Actively Traded: {json.dumps(combined_data['tickers']['most_actively_traded'], indent=2)}
+        Top Gainers: {json.dumps(tickers.get('top_gainers', []), indent=2)}
+        Top Losers: {json.dumps(tickers.get('top_losers', []), indent=2)}
+        Most Actively Traded: {json.dumps(tickers.get('most_actively_traded', []), indent=2)}
         """
-        
-        # Use OpenAI ChatCompletion API
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",  # Use the model suitable for your needs
-            messages=[
-                {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
-                {"role": "user", "content": f"Summarize the following RAG data into a concise newsletter:\n{input_text}"}
-            ],
-            max_tokens=1500,
-            temperature=0.7
-        )
-        
-        # Access the response correctly
-        newsletter = response.choices[0].message.content.strip()  # Correct access for ChatCompletionMessage
 
-        # Display the newsletter
-        st.subheader("Generated Newsletter")
-        st.text(newsletter)
-        
+        try:
+            response = openai.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
+                    {"role": "user", "content": f"Summarize the following data into a newsletter:\n{input_text}"}
+                ],
+                max_tokens=1500,
+                temperature=0.7
+            )
+            return {"newsletter": response.choices[0].message.content.strip()}
+        except Exception as e:
+            return {"error": f"Failed to generate newsletter: {e}"}
+
+
+### Define Tasks ###
+news_task = Task(
+    description="Load news data from Alpha Vantage and store in ChromaDB.",
+    expected_output="News data loaded successfully",
+    agent=NewsDataAgent(),
+)
+
+ticker_task = Task(
+    description="Load ticker trends from Alpha Vantage and store in ChromaDB.",
+    expected_output="Ticker trends data loaded successfully",
+    agent=TickerTrendsAgent(),
+)
+
+summarization_task = Task(
+    description="Retrieve and summarize data from ChromaDB.",
+    expected_output="Combined data ready for summarization",
+    agent=DataSummarizationAgent(),
+    context=[news_task, ticker_task],
+)
+
+newsletter_task = Task(
+    description="Generate a newsletter summarizing all data.",
+    expected_output="A concise financial newsletter",
+    agent=NewsletterAgent(),
+    context=[summarization_task],
+)
+
+### Assemble the Crew ###
+my_crew = Crew(
+    agents=[news_task.agent, ticker_task.agent, summarization_task.agent, newsletter_task.agent],
+    tasks=[news_task, ticker_task, summarization_task, newsletter_task],
+)
+
+### Streamlit Function ###
+def generate_newsletter():
+    st.write("### Generating Newsletter")
+    try:
+        results = my_crew.kickoff(inputs={})
+        newsletter = results["newsletter_task"]
+        if "error" in newsletter:
+            st.error(newsletter["error"])
+        else:
+            st.subheader("Generated Newsletter")
+            st.text(newsletter["newsletter"])
     except Exception as e:
-        st.error(f"Error generating newsletter: {e}")
+        st.error(f"Failed to generate newsletter: {e}")
 
-# Main Logic
-if option == "Load News Data":
-    load_news_data()
-elif option == "Retrieve News Data":
-    retrieve_news_data()
-elif option == "Load Ticker Trends Data":
-    load_ticker_trends_data()
-elif option == "Retrieve Ticker Trends Data":
-    retrieve_ticker_trends_data()
-elif option == "Generate Newsletter":
+
+### Main Logic ###
+if option == "Generate Newsletter":
     generate_newsletter()
