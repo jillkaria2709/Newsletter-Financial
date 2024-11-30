@@ -213,12 +213,13 @@ def generate_newsletter():
             temperature=0.7
         )
         
-        # Extract the summary
-        newsletter = response["choices"][0]["message"]["content"].strip()
-        
+        # Access the response correctly
+        newsletter = response.choices[0].message["content"].strip()  # Correct access
+
         # Display the newsletter
         st.subheader("Generated Newsletter")
         st.text(newsletter)
+        
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
