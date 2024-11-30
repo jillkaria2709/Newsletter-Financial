@@ -41,6 +41,10 @@ option = st.sidebar.radio(
 
 def load_news_data():
     news_collection = client.get_or_create_collection("news_sentiment_data")
+    existing_data = news_collection.get()
+    if existing_data["documents"]:
+        st.warning("News data already exists in ChromaDB. No API call made.")
+        return
     try:
         response = requests.get(news_url)
         response.raise_for_status()
@@ -105,6 +109,10 @@ def retrieve_news_data():
 
 def load_ticker_trends_data():
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
+    existing_data = ticker_collection.get()
+    if existing_data["documents"]:
+        st.warning("Ticker trends data already exists in ChromaDB. No API call made.")
+        return
     try:
         response = requests.get(tickers_url)
         response.raise_for_status()
