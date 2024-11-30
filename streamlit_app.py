@@ -100,8 +100,8 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correctly access the content using dot notation
-        content = response.choices[0].message["content"]
+        # Correctly access the content attribute using dot notation
+        content = response.choices[0].message.content
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
