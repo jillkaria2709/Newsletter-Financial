@@ -6,7 +6,10 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
+from bespokelabs import BespokeLabs 
 
+# Initialize Bespoke Labs API
+bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -178,7 +181,7 @@ tasks = [
 ### Newsletter Generation ###
 
 def generate_newsletter_with_rag():
-    """Generate the newsletter using RAG and agents."""
+    """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
     newsletter_content = []
 
     # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
@@ -208,9 +211,28 @@ def generate_newsletter_with_rag():
         st.error("Failed to generate the newsletter.")
     else:
         newsletter_content.append(f"## Writer's Newsletter\n{newsletter}\n")
+        st.subheader("Generated Newsletter")
+        st.markdown("\n".join(newsletter_content))
 
-    st.subheader("Generated Newsletter")
-    st.markdown("\n".join(newsletter_content))
+    # Step 5: Validate the newsletter with Bespoke Labs
+    try:
+        st.write("Validating the newsletter with Bespoke Labs...")
+        factcheck_response = bl.minicheck.factcheck.create(
+            claim=newsletter,
+            context=json.dumps(combined_data)  # Use combined RAG data as context
+        )
+        support_prob = factcheck_response.get("support_prob", "N/A")
+        st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
+        if support_prob == "N/A":
+            st.error("Bespoke Labs validation returned no support probability.")
+        elif support_prob >= 0.8:
+            st.success("The newsletter is highly supported by the context.")
+        elif support_prob >= 0.5:
+            st.warning("The newsletter has partial support from the context.")
+        else:
+            st.error("The newsletter lacks sufficient support from the context.")
+    except Exception as e:
+        st.error(f"Error during newsletter validation: {e}")
 
 ### Main Page Buttons ###
 if st.button("Fetch and Store News Data"):
