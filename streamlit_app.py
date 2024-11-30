@@ -100,6 +100,31 @@ def call_openai_gpt4(prompt):
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return f"Error generating response: {str(e)}"
 
+def fetch_ticker_price(ticker):
+    """Fetch the latest price for the given ticker."""
+    try:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+
+        if "Time Series (Daily)" in data:
+            latest_date = max(data["Time Series (Daily)"].keys())
+            latest_prices = data["Time Series (Daily)"][latest_date]
+            return {
+                "ticker": ticker,
+                "date": latest_date,
+                "open": latest_prices["1. open"],
+                "high": latest_prices["2. high"],
+                "low": latest_prices["3. low"],
+                "close": latest_prices["4. close"],
+                "volume": latest_prices["5. volume"]
+            }
+        else:
+            return {"error": "Invalid ticker or no data available."}
+    except Exception as e:
+        return {"error": f"Error fetching ticker price: {e}"}
+
 ### RAG-Agent Definition ###
 
 class RAGAgent:
@@ -189,3 +214,28 @@ if st.button("Fetch and Store Trends Data"):
 
 if st.button("Generate Newsletter"):
     generate_newsletter_with_rag()
+
+### Chatbot UI ###
+st.subheader("Chatbot")
+
+# Input box for user queries
+user_input = st.text_input("Ask me something:")
+
+if st.button("Send"):
+    if "newsletter" in user_input.lower():
+        # Respond with newsletter information
+        st.write("This is a daily financial newsletter providing market trends and stock updates.")
+    elif "ticker" in user_input.lower():
+        # Fetch the ticker price
+        try:
+            ticker = user_input.split(" ")[-1].strip()
+            result = fetch_ticker_price(ticker)
+            if "error" in result:
+                st.error(result["error"])
+            else:
+                st.write(f"Ticker: {result['ticker']}, Date: {result['date']}, Close: {result['close']}")
+        except Exception as e:
+            st.error(f"Error processing ticker: {e}")
+    else:
+        # Fallback response
+        st.write("I can answer about the newsletter or fetch stock prices. Try asking about a ticker!")
