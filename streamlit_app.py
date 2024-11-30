@@ -23,12 +23,8 @@ if not bespoke_key:
     st.error("Bespoke API key is missing or invalid. Check your secrets file.")
 
 # Initialize Bespoke Labs Client
-try:
-    bl = BespokeLabs(auth_token=bespoke_key)  # Directly pass the API key
-    st.success("Bespoke Labs client initialized successfully.")
-except Exception as e:
-    st.error(f"Failed to initialize Bespoke Labs client: {e}")
-    bl = None
+bl = BespokeLabs()  # Directly pass the API key
+
 
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
