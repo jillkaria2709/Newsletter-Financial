@@ -92,11 +92,11 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Debugging: Log the response structure
+        # Debugging: Log the full response
         st.write("GPT-4 API Response:", response)
 
-        # Access the content using object attributes
-        content = response['choices'][0]['message']['content']
+        # Access the content using the appropriate attribute
+        content = response.choices[0].message["content"]
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
