@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import openai
-from crewai import Crew, Process, Agent, Task, TaskOutput, CrewOutput
+from crewai import Crew, Process, Agent, Task
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
