@@ -170,7 +170,7 @@ def generate_newsletter_with_rag():
     ]
 
     # Step 3: Generate the newsletter with Writer Agent
-    st.write("Executing: Write the newsletter (Writer)")
+    st.write("Executing: Write the newsletter (Newsletter Writer)")
     writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
     st.write("Writer Response:", newsletter)  # Print Writer's response
