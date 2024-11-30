@@ -257,7 +257,6 @@ if st.button("Send"):
 
             if rag_results:
                 # Combine RAG results into a context for GPT-4
-                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
                 # Safely process rag_results into a string context
                 context = "\n".join(
                     [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
@@ -272,7 +271,6 @@ if st.button("Send"):
                 st.write(response)
             else:
                 # Fallback to OpenAI GPT-4
-                st.write("Not found in today's data. Searching online...")
                 prompt = (
                     f"You are a helpful assistant. Based on the user's query below, provide a well-framed and "
                     f"relevant response:\n\nQuery: {user_input}"
