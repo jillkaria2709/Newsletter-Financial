@@ -24,6 +24,14 @@ st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
 
+def retrieve_from_multiple_rags(query, collections, top_k=5):
+    """Search multiple collections for relevant RAG data."""
+    results = []
+    for collection_name in collections:
+        collection_results = retrieve_from_chromadb(collection_name, query, top_k)
+        results.extend(collection_results)
+    return results
+
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
     collection = client.get_or_create_collection(collection_name)
