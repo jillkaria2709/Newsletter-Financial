@@ -13,10 +13,7 @@ client = chromadb.PersistentClient()
 
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
-openai_api_key = st.secrets["openai"]["api_key"]
-
-# Set OpenAI API key for the library
-openai.api_key = openai_api_key
+openai.api_key = st.secrets["openai"]["api_key"]
 
 # API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
