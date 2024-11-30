@@ -2,16 +2,13 @@ import streamlit as st
 import requests
 import json
 import openai
-from crewai import Crew, Process, Agent, Task
-from langchain.chat_models import ChatOpenAI
+import chromadb
+from chromadb.config import Settings
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
-
-import chromadb
-from chromadb.config import Settings
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -20,170 +17,146 @@ client = chromadb.PersistentClient()
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
 
-# Initialize ChatOpenAI Model
-openai_llm = ChatOpenAI(model="gpt-4", openai_api_key=openai.api_key)
-
 # API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System with CrewAI and Tasks")
+st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 # Sidebar options
 st.sidebar.header("Options")
 option = st.sidebar.radio(
     "Choose an action:",
-    ["Load News Data", "Retrieve News Data", "Load Ticker Trends Data", "Retrieve Ticker Trends Data", "Generate Newsletter"]
+    ["Update News Data", "Update Ticker Trends Data", "Generate Newsletter"]
 )
 
-### Function Definitions for Data Loading and Retrieval ###
+### Helper Functions ###
 
-def load_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    existing_data = news_collection.get()
-    if existing_data["documents"]:
-        st.warning("News data already exists in ChromaDB. No API call made.")
-        return
+def update_chromadb(collection_name, data):
+    """Update ChromaDB with new data."""
+    collection = client.get_or_create_collection(collection_name)
+    collection.reset()  # Clear existing data
+    for i, item in enumerate(data, start=1):
+        collection.add(
+            ids=[str(i)],
+            metadatas=[{"source": item.get("source", "N/A"), "time_published": item.get("time_published", "N/A")}],
+            documents=[json.dumps(item)]
+        )
+
+def fetch_and_update_news_data():
+    """Fetch news data from the API and update ChromaDB."""
     try:
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
         if 'feed' in data:
-            news_items = data['feed']
-            for i, item in enumerate(news_items, start=1):
-                document = {
-                    "id": str(i),
-                    "title": item["title"],
-                    "url": item["url"],
-                    "time_published": item["time_published"],
-                    "source": item["source"],
-                    "summary": item.get("summary", "N/A"),
-                    "topics": [topic["topic"] for topic in item.get("topics", [])],
-                    "overall_sentiment_label": item.get("overall_sentiment_label", "N/A"),
-                    "overall_sentiment_score": item.get("overall_sentiment_score", "N/A"),
-                    "ticker_sentiments": [
-                        {
-                            "ticker": ticker["ticker"],
-                            "relevance_score": ticker["relevance_score"],
-                            "ticker_sentiment_label": ticker["ticker_sentiment_label"],
-                            "ticker_sentiment_score": ticker["ticker_sentiment_score"],
-                        }
-                        for ticker in item.get("ticker_sentiment", [])
-                    ],
-                }
-                topics_str = ", ".join(document["topics"])
-                ticker_sentiments_str = json.dumps(document["ticker_sentiments"])
-                news_collection.add(
-                    ids=[document["id"]],
-                    metadatas=[{
-                        "source": document["source"],
-                        "time_published": document["time_published"],
-                        "topics": topics_str,
-                        "overall_sentiment": document["overall_sentiment_label"],
-                        "ticker_sentiments": ticker_sentiments_str,
-                    }],
-                    documents=[json.dumps(document)]
-                )
-            st.success(f"Inserted {len(news_items)} news items into ChromaDB.")
+            update_chromadb("news_sentiment_data", data['feed'])
+            st.success("News data updated in ChromaDB.")
         else:
-            st.error("No news data found.")
+            st.error("No news data found in API response.")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error updating news data: {e}")
 
-def retrieve_news_data():
-    news_collection = client.get_or_create_collection("news_sentiment_data")
-    doc_id = st.text_input("Enter the News Document ID to retrieve:", "1")
-    if st.button("Retrieve News"):
-        try:
-            results = news_collection.get(ids=[doc_id])
-            if results['documents']:
-                for document in results['documents']:
-                    parsed_document = json.loads(document)
-                    st.write("### News Data")
-                    st.json(parsed_document)
-            else:
-                st.warning("No data found.")
-        except Exception as e:
-            st.error(f"Error: {e}")
-
-def load_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-    existing_data = ticker_collection.get()
-    if existing_data["documents"]:
-        st.warning("Ticker trends data already exists in ChromaDB. No API call made.")
-        return
+def fetch_and_update_ticker_trends_data():
+    """Fetch ticker trends data from the API and update ChromaDB."""
     try:
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
         if "top_gainers" in data:
-            ticker_collection.add(
-                ids=["top_gainers"],
-                metadatas=[{"type": "top_gainers"}],
-                documents=[json.dumps(data["top_gainers"])],
-            )
-            ticker_collection.add(
-                ids=["top_losers"],
-                metadatas=[{"type": "top_losers"}],
-                documents=[json.dumps(data["top_losers"])],
-            )
-            ticker_collection.add(
-                ids=["most_actively_traded"],
-                metadatas=[{"type": "most_actively_traded"}],
-                documents=[json.dumps(data["most_actively_traded"])],
-            )
-            st.success("Ticker trends data added to ChromaDB.")
+            combined_data = [
+                {"type": "top_gainers", "data": data["top_gainers"]},
+                {"type": "top_losers", "data": data["top_losers"]},
+                {"type": "most_actively_traded", "data": data["most_actively_traded"]}
+            ]
+            update_chromadb("ticker_trends_data", combined_data)
+            st.success("Ticker trends data updated in ChromaDB.")
         else:
             st.error("Invalid data format received from API.")
     except Exception as e:
-        st.error(f"Error: {e}")
+        st.error(f"Error updating ticker trends data: {e}")
 
-def retrieve_ticker_trends_data():
-    ticker_collection = client.get_or_create_collection("ticker_trends_data")
-    data_type = st.radio("Data Type", ["Top Gainers", "Top Losers", "Most Actively Traded"])
-    if st.button("Retrieve Data"):
-        try:
-            results = ticker_collection.get(ids=[data_type.lower().replace(" ", "_")])
-            if results["documents"]:
-                st.json(json.loads(results["documents"][0]))
-            else:
-                st.warning("No data found.")
-        except Exception as e:
-            st.error(f"Error: {e}")
+def retrieve_from_chromadb(collection_name, query, top_k=5):
+    """Retrieve relevant documents from ChromaDB."""
+    collection = client.get_or_create_collection(collection_name)
+    try:
+        results = collection.query(
+            query_texts=[query],
+            n_results=top_k
+        )
+        return results['documents']
+    except Exception as e:
+        st.error(f"Error retrieving data from ChromaDB: {e}")
+        return []
 
-### Crew, Agents, and Tasks ###
+def call_openai_gpt4(prompt):
+    """Call OpenAI GPT-4 to process the prompt."""
+    try:
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
+            messages=[{"role": "system", "content": "You are a helpful assistant."},
+                      {"role": "user", "content": prompt}]
+        )
+        return response['choices'][0]['message']['content']
+    except Exception as e:
+        st.error(f"Error calling OpenAI GPT-4: {e}")
+        return "Error generating response."
 
-researcher = Agent(role="Researcher", goal="Process news data", backstory="Experienced researcher.", llm=openai_llm)
-market_analyst = Agent(role="Market Analyst", goal="Analyze trends", backstory="Market trends expert.", llm=openai_llm)
-risk_analyst = Agent(role="Risk Analyst", goal="Identify risks", backstory="Experienced in risk analysis.", llm=openai_llm)
-writer = Agent(role="Writer", goal="Generate newsletter", backstory="Expert in content creation.", llm=openai_llm)
+### RAG-Agent Definition ###
 
-news_task = Task(description="Extract insights from news data", agent=researcher)
-market_trends_task = Task(description="Analyze market trends", agent=market_analyst)
-risk_analysis_task = Task(description="Analyze risk data", agent=risk_analyst)
-newsletter_task = Task(description="Write the newsletter", agent=writer)
+class RAGAgent:
+    def __init__(self, role, goal):
+        self.role = role
+        self.goal = goal
 
-report_crew = Crew(
-    agents=[researcher, market_analyst, risk_analyst, writer],
-    tasks=[news_task, market_trends_task, risk_analysis_task, newsletter_task],
-    process=Process.sequential
-)
+    def execute_task(self, task_description):
+        """Execute the task using RAG and GPT-4 summarization."""
+        # Retrieve relevant data from ChromaDB
+        if "news" in self.goal.lower():
+            retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
+        elif "trends" in self.goal.lower():
+            retrieved_data = retrieve_from_chromadb("ticker_trends_data", task_description)
+        else:
+            retrieved_data = []
 
-def generate_newsletter_with_tasks():
-    result = report_crew.kickoff()
-    newsletter = result.tasks[-1].output  # Get the final task's output
+        # Combine retrieved data with task description
+        augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(retrieved_data)}"
+
+        # Call GPT-4 for summarization
+        summary = call_openai_gpt4(augmented_prompt)
+        return summary
+
+### Agents and Tasks ###
+
+researcher = RAGAgent(role="Researcher", goal="Process news data")
+market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
+risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
+writer = RAGAgent(role="Writer", goal="Generate newsletter")
+
+tasks = [
+    {"description": "Extract insights from news data", "agent": researcher},
+    {"description": "Analyze market trends", "agent": market_analyst},
+    {"description": "Analyze risk data", "agent": risk_analyst},
+    {"description": "Write the newsletter", "agent": writer},
+]
+
+### Newsletter Generation ###
+
+def generate_newsletter_with_rag():
+    """Generate the newsletter using RAG and agents."""
+    newsletter_content = []
+    for task in tasks:
+        st.write(f"Executing: {task['description']} with {task['agent'].role}")
+        result = task['agent'].execute_task(task['description'])
+        newsletter_content.append(f"## {task['agent'].role}\n{result}\n")
     st.subheader("Generated Newsletter")
-    st.text(newsletter)
+    st.markdown("\n".join(newsletter_content))
 
 ### Main Logic ###
-if option == "Load News Data":
-    load_news_data()
-elif option == "Retrieve News Data":
-    retrieve_news_data()
-elif option == "Load Ticker Trends Data":
-    load_ticker_trends_data()
-elif option == "Retrieve Ticker Trends Data":
-    retrieve_ticker_trends_data()
+if option == "Update News Data":
+    fetch_and_update_news_data()
+elif option == "Update Ticker Trends Data":
+    fetch_and_update_ticker_trends_data()
 elif option == "Generate Newsletter":
-    generate_newsletter_with_tasks()
+    generate_newsletter_with_rag()
