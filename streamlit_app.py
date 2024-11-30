@@ -2,7 +2,7 @@ import streamlit as st
 import requests
 import json
 import openai
-from crewai import Agent, System
+from crewai import Agent, Crew
 
 # Import pysqlite3 for chromadb compatibility
 __import__('pysqlite3')
@@ -217,7 +217,7 @@ class NewsletterGenerator(Agent):
 
         return {"newsletter": response.choices[0].message.content.strip()}
 
-multi_agent_system = System()
+multi_agent_system = Crew()
 multi_agent_system.add_agent("CompanyAnalyst", CompanyAnalyst())
 multi_agent_system.add_agent("MarketTrendsAnalyst", MarketTrendsAnalyst())
 multi_agent_system.add_agent("RiskAnalysisAgent", RiskAnalysisAgent())
