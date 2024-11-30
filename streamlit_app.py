@@ -189,27 +189,36 @@ def generate_newsletter():
         
         # Combine data
         combined_data = {
-            "news": news_data,
+            "news": news_data[:10],  # Limit news data for summarization
             "tickers": ticker_data
         }
         
         # Prepare data for summarization
         input_text = f"""
-        News Data: {json.dumps(news_data[:10], indent=2)}
-        Ticker Trends: {json.dumps(ticker_data, indent=2)}
+        News Data: {json.dumps(combined_data['news'], indent=2)}
+        Ticker Trends:
+        Top Gainers: {json.dumps(combined_data['tickers']['top_gainers'], indent=2)}
+        Top Losers: {json.dumps(combined_data['tickers']['top_losers'], indent=2)}
+        Most Actively Traded: {json.dumps(combined_data['tickers']['most_actively_traded'], indent=2)}
         """
         
-        # Summarize with OpenAI
+        # Use OpenAI ChatCompletion API
         response = openai.chat.completions.create(
-            engine="text-davinci-003",
-            prompt=f"Summarize the following RAG data into a concise newsletter:\n{input_text}",
+            model="gpt-3.5-turbo",  # Use the model suitable for your needs
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
+                {"role": "user", "content": f"Summarize the following RAG data into a concise newsletter:\n{input_text}"}
+            ],
             max_tokens=1500,
             temperature=0.7
         )
         
-        # Display newsletter
+        # Extract the summary
+        newsletter = response["choices"][0]["message"]["content"].strip()
+        
+        # Display the newsletter
         st.subheader("Generated Newsletter")
-        st.text(response.choices[0].text.strip())
+        st.text(newsletter)
     except Exception as e:
         st.error(f"Error generating newsletter: {e}")
 
