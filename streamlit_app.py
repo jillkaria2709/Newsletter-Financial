@@ -16,15 +16,10 @@ client = chromadb.PersistentClient()
 # Access keys from secrets.toml
 alpha_vantage_key = st.secrets["api_keys"]["alpha_vantage"]
 openai.api_key = st.secrets["api_keys"]["openai"]
-bespoke_key = st.secrets["api_keys"]["bespoke_labs"]
-
-# Verify Bespoke API Key
-if not bespoke_key:
-    st.error("Bespoke API key is missing or invalid. Check your secrets file.")
-
-# Initialize Bespoke Labs Client
-bl = BespokeLabs(auth_token=bespoke_key)
-
+bl = BespokeLabs(
+    # This is the default and can be omitted
+    auth_token=os.environ.get("bespoke-f7452072ae299377b684bd387baab73b90b02bd0f9b324dbef25d9f7cabd2946"),
+)
 
 # API URLs
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
