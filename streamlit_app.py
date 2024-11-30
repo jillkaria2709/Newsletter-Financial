@@ -4,20 +4,16 @@ import json
 import openai
 __import__('pysqlite3')
 import sys
-import os
-from configparser import ConfigParser
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from chromadb.config import Settings
 
-# Load API keys from secrets file
-config = ConfigParser()
-config.read("secrets")
-alpha_vantage_key = config["api_keys"]["alpha_vantage"]
-openai.api_key = config["api_keys"]["openai"]
-
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
+
+# Access keys from secrets.toml
+alpha_vantage_key = st.secrets["api_keys"]["alpha_vantage"]
+openai.api_key = st.secrets["api_keys"]["openai"]
 
 # API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
@@ -94,7 +90,7 @@ def load_news_data():
     except Exception as e:
         st.error(f"Unexpected error: {e}")
 
-### Function to Retrieve News Data from ChromaDB ###
+### Function to Retrieve News Data ###
 def retrieve_news_data():
     # Access the collection
     news_collection = client.get_or_create_collection("news_sentiment_data")
@@ -115,7 +111,7 @@ def retrieve_news_data():
         except Exception as e:
             st.error(f"Error retrieving news data: {e}")
 
-### Function to Load Ticker Trends Data into ChromaDB ###
+### Function to Load Ticker Trends Data ###
 def load_ticker_trends_data():
     # Create or access a collection for ticker trends
     ticker_collection = client.get_or_create_collection("ticker_trends_data")
@@ -127,8 +123,8 @@ def load_ticker_trends_data():
         data = response.json()
 
         # Validate data structure
-        if "metadata" in data and "top_gainers" in data:
-            # Decompose data for structured storage
+        if "top_gainers" in data:
+            # Store decomposed data in ChromaDB
             ticker_collection.add(
                 ids=["top_gainers"],
                 metadatas=[{"type": "top_gainers"}],
