@@ -8,7 +8,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs 
 
-client = BespokeLabs(
+bl = BespokeLabs(
     auth_token=st.secrets["bespoke"]["api_key"],
 )
 # Initialize ChromaDB Persistent Client
