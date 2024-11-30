@@ -23,7 +23,7 @@ if not bespoke_key:
     st.error("Bespoke API key is missing or invalid. Check your secrets file.")
 
 # Initialize Bespoke Labs Client
-bl = BespokeLabs()  # Directly pass the API key
+bl = BespokeLabs(auth_token=bespoke_key)
 
 
 # API URLs
