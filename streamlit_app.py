@@ -170,7 +170,6 @@ def retrieve_ticker_trends_data():
         except Exception as e:
             st.error(f"Error retrieving data: {e}")
 
-### Function to Generate Newsletter ###
 def generate_newsletter():
     # Access collections
     news_collection = client.get_or_create_collection("news_sentiment_data")
@@ -204,7 +203,7 @@ def generate_newsletter():
         
         # Use OpenAI ChatCompletion API
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",  # Use the model suitable for your needs
+            model="gpt-4o-mini",  # Use the model suitable for your needs
             messages=[
                 {"role": "system", "content": "You are a helpful assistant tasked with summarizing data into a concise newsletter."},
                 {"role": "user", "content": f"Summarize the following RAG data into a concise newsletter:\n{input_text}"}
@@ -214,7 +213,7 @@ def generate_newsletter():
         )
         
         # Access the response correctly
-        newsletter = response.choices[0].message["content"].strip()  # Correct access
+        newsletter = response.choices[0].message.content.strip()  # Correct access for ChatCompletionMessage
 
         # Display the newsletter
         st.subheader("Generated Newsletter")
