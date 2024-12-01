@@ -137,15 +137,14 @@ def fetch_ticker_price(ticker):
     except Exception as e:
         return {"error": f"Error fetching ticker price: {e}"}
 
-### RAG-Agent Definition ###
-
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        """Execute the task using RAG and GPT-4 summarization."""
+        """Execute the task using RAG data and OpenAI GPT-4 for formatting."""
+        # Retrieve relevant data from ChromaDB
         if "news" in self.goal.lower():
             retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
         elif "trends" in self.goal.lower():
@@ -153,13 +152,27 @@ class RAGAgent:
         else:
             retrieved_data = []
 
+        # Combine retrieved data with additional context if provided
         combined_data = retrieved_data
         if additional_data:
             combined_data.extend(additional_data)
 
-        augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}"
-        summary = call_openai_gpt4(augmented_prompt)
-        return summary
+        # Ensure only RAG data is passed to GPT-4
+        formatted_data = json.dumps(combined_data, indent=2)
+
+        # Construct the prompt for GPT-4
+        prompt = (
+            f"Role: {self.role}\n"
+            f"Goal: {self.goal}\n"
+            f"Task: {task_description}\n\n"
+            f"Use ONLY the following RAG data to frame your response:\n"
+            f"{formatted_data}\n\n"
+            f"Do not add any new information not present in the RAG data."
+        )
+
+        # Use OpenAI GPT-4 to frame the response
+        response = call_openai_gpt4(prompt)
+        return response
 
 ### Newsletter Generation ###
 
@@ -184,9 +197,8 @@ def generate_newsletter_with_rag():
 
     st.write("Executing: Write the newsletter (Writer)")
     writer_task_description = (
-    "Write a newsletter based on the provided insights. "
-    "Ensure that key points from the researcher, market analyst, and risk analyst "
-    "are prominently included and explicitly referenced."
+        "Write a cohesive newsletter using ONLY the provided insights from RAG data. "
+        "Do not include any new or external information."
     )
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
 
@@ -197,6 +209,7 @@ def generate_newsletter_with_rag():
         st.subheader("Generated Newsletter")
         st.markdown("\n".join(newsletter_content))
 
+    # Validate the newsletter using Bespoke Labs
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
         factcheck_response = bl.minicheck.factcheck.create(
@@ -204,20 +217,13 @@ def generate_newsletter_with_rag():
             context=json.dumps(combined_data)  # Use combined RAG data as context
         )
 
-        # Debugging: Display the raw response
         st.write("Factcheck Response (Raw):", factcheck_response)
-        st.write("Generated Newsletter Content:", newsletter)
-        st.write("Validation Context (Combined Data):", combined_data)
-
-        # Access support_prob directly from the response
         support_prob = getattr(factcheck_response, "support_prob", None)
 
         if support_prob is None:
             st.error("Validation returned no support probability.")
         else:
             st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
-
-            # Add conditional logic to handle the support probability
             if support_prob >= 0.7:
                 st.success("The newsletter is well-supported by the context.")
             elif support_prob >= 0.4:
