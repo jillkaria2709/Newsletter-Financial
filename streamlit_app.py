@@ -307,24 +307,25 @@ if st.button("Send"):
 
         # Call GPT-4 with tools
         try:
-            response = openai.chat.completions.create(
+            response = openai.ChatCompletion.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                functions=tools,  # Corrected structure for tools
+                functions=tools,
                 function_call="auto"
             )
 
-            # Check if GPT made a function call
-            if response.get("function_call"):
-                tool_name = response["function_call"]["name"]
-                parameters = json.loads(response["function_call"]["parameters"])
+            # Correctly access GPT-4 function call response
+            if "function_call" in response.choices[0].message:
+                function_call = response.choices[0].message["function_call"]
+                tool_name = function_call["name"]
+                parameters = json.loads(function_call["parameters"])
                 tool_result = handle_tool_call(tool_name, parameters)
                 bot_response = json.dumps(tool_result, indent=2)
             else:
-                bot_response = response.choices[0].message.content.strip()
+                bot_response = response.choices[0].message["content"]
 
             st.write(bot_response)
 
