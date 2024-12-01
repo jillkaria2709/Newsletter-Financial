@@ -323,7 +323,7 @@ if st.button("Send"):
             if hasattr(message, "function_call") and message.function_call:
                 # If a function call is made, extract its details
                 tool_name = message.function_call.name
-                parameters = json.loads(message.function_call.parameters)
+                parameters = json.loads(message.function_call.arguments)  # Correct attribute is 'arguments'
                 tool_result = handle_tool_call(tool_name, parameters)
                 bot_response = json.dumps(tool_result, indent=2)
             else:
