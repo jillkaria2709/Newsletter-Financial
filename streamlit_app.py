@@ -6,7 +6,7 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from bespokelabs import BespokeLabs
+from bespokelabs import BespokeLabs 
 
 # Initialize Bespoke Labs
 bl = BespokeLabs(
@@ -28,6 +28,33 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
+
+def retrieve_top_news(collection_name, query, top_k=3):
+    """Retrieve top K most relevant news articles based on relevance_score_definition."""
+    try:
+        # Retrieve documents from ChromaDB
+        collection = client.get_or_create_collection(collection_name)
+        results = collection.query(
+            query_texts=[query],
+            n_results=10
+        )
+
+        # Ensure results['documents'] is processed correctly
+        documents = results['documents']
+
+        # Parse and rank the documents
+        parsed_docs = [json.loads(doc) if isinstance(doc, str) else doc for doc in documents]
+        ranked_articles = sorted(
+            parsed_docs,
+            key=lambda x: x.get("relevance_score_definition", 0),
+            reverse=True
+        )[:top_k]
+
+        return ranked_articles
+    except Exception as e:
+        st.error(f"Error retrieving data from {collection_name}: {e}")
+        return []
+
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
     collection = client.get_or_create_collection(collection_name)
@@ -44,7 +71,7 @@ def fetch_and_update_news_data():
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
-        st.write("News API Response:", data)
+        st.write("News API Response:", data)  # Print the API response
         if 'feed' in data:
             update_chromadb("news_sentiment_data", data['feed'])
             st.success("News data updated in ChromaDB.")
@@ -59,7 +86,7 @@ def fetch_and_update_ticker_trends_data():
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
-        st.write("Ticker Trends API Response:", data)
+        st.write("Ticker Trends API Response:", data)  # Print the API response
         if "top_gainers" in data:
             combined_data = [
                 {"type": "top_gainers", "data": data["top_gainers"]},
@@ -73,29 +100,10 @@ def fetch_and_update_ticker_trends_data():
     except Exception as e:
         st.error(f"Error updating ticker trends data: {e}")
 
-def retrieve_top_news(collection_name, query, top_k=3):
-    """Retrieve top K most relevant news articles based on relevance_score_definition."""
-    collection = client.get_or_create_collection(collection_name)
-    try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=10
-        )
-        documents = results['documents']
-        # Correctly process the documents without parsing lists
-        ranked_articles = sorted(
-            [json.loads(doc) if isinstance(doc, str) else doc for doc in documents],
-            key=lambda x: x.get("relevance_score_definition", 0),
-            reverse=True
-        )[:top_k]
-        return ranked_articles
-    except Exception as e:
-        st.error(f"Error retrieving data from {collection_name}: {e}")
-        return []
-
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
+        # Make the API call
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -103,29 +111,36 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        return response['choices'][0]['message']['content']
+        # Access the content properly
+        return response.choices[0].message['content']
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
 
 ### Agents ###
+
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        """Execute the task using RAG data and OpenAI GPT-4 for formatting."""
-        retrieved_data = additional_data or []
-        formatted_data = json.dumps(retrieved_data, indent=2)
+        """Execute the task using RAG and OpenAI GPT-4 for formatting."""
+        combined_data = additional_data or []
+        formatted_data = json.dumps(combined_data, indent=2)
+
         prompt = (
             f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\n\n"
             f"Use ONLY the following RAG data to frame your response:\n{formatted_data}"
         )
-        return call_openai_gpt4(prompt)
+
+        response = call_openai_gpt4(prompt)
+        return response
 
 ### Newsletter Generation ###
+
 def generate_newsletter_with_rag():
+    """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
     st.write("Executing: Extract insights from news data (Researcher)")
     top_news = retrieve_top_news("news_sentiment_data", "Market trends", top_k=3)
     news_results = researcher.execute_task("Extract insights from the top 3 news articles.", additional_data=top_news)
@@ -135,7 +150,7 @@ def generate_newsletter_with_rag():
 
     st.write("Executing: Analyze risk data (Risk Analyst)")
     risk_context = [{"source": "news_sentiment_data", "content": top_news}]
-    risk_results = risk_analyst.execute_task("Identify risks based on the top 3 news articles.", additional_data=risk_context)
+    risk_results = risk_analyst.execute_task("Identify risks in the current market landscape.", additional_data=risk_context)
 
     context = {
         "RAG_Data": {"News": top_news},
@@ -167,6 +182,7 @@ def generate_newsletter_with_rag():
         st.error(f"Error during newsletter validation: {e}")
 
 ### Main Page Buttons ###
+
 researcher = RAGAgent(role="Researcher", goal="Process news data")
 market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
 risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
