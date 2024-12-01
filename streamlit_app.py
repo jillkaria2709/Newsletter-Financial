@@ -29,7 +29,7 @@ st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
 
-def retrieve_from_multiple_rags(query, collections, top_k=5):
+def retrieve_from_multiple_rags(query, collections, top_k=3):
     """Search multiple collections for relevant RAG data."""
     results = []
     for collection_name in collections:
