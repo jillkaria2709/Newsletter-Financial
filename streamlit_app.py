@@ -100,19 +100,19 @@ tools = [
 ]
 
 def format_ticker_response(ticker_data):
-    """Format the ticker data for better readability."""
+    """Format the ticker data for clean and readable output."""
     if "error" in ticker_data:
         return f"Error: {ticker_data['error']}"
 
-    # Properly formatted response with plain text
+    # Properly formatted plain text response
     return (
-        f"**Ticker**: {ticker_data['ticker']}  \n"
-        f"**Date**: {ticker_data['date']}  \n"
-        f"**Open Price**: ${float(ticker_data['open']):,.2f}  \n"
-        f"**High Price**: ${float(ticker_data['high']):,.2f}  \n"
-        f"**Low Price**: ${float(ticker_data['low']):,.2f}  \n"
-        f"**Close Price**: ${float(ticker_data['close']):,.2f}  \n"
-        f"**Volume**: {int(ticker_data['volume']):,} shares"
+        f"Ticker: {ticker_data['ticker']}\n"
+        f"Date: {ticker_data['date']}\n"
+        f"Open Price: ${float(ticker_data['open']):,.2f}\n"
+        f"High Price: ${float(ticker_data['high']):,.2f}\n"
+        f"Low Price: ${float(ticker_data['low']):,.2f}\n"
+        f"Close Price: ${float(ticker_data['close']):,.2f}\n"
+        f"Volume: {int(ticker_data['volume']):,} shares"
     )
 
 ### Define Function ###
@@ -358,12 +358,13 @@ if st.button("Send"):
     else:
         user_input = user_input.strip()
 
-        # Case 1: User entered a stock ticker
+        # Inside Chatbot logic
         if is_ticker_query(user_input):
             st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
             ticker_result = fetch_ticker_price(user_input.upper())
             bot_response = format_ticker_response(ticker_result)
-
+            st.text(bot_response)  # Use st.text for plain text output
+            
         # Case 2: User asked a RAG-related question
         elif any(keyword in user_input.lower() for keyword in ["news", "trends", "market", "insights"]):
             st.write("Searching in stored RAG data...")
