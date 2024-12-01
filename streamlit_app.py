@@ -7,7 +7,6 @@ import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs
-import matplotlib.pyplot as plt
 
 # Initialize Bespoke Labs with the API key
 bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
@@ -350,7 +349,12 @@ if st.button("Send"):
             st.write(response)
         else:
             rag_results = retrieve_from_multiple_rags(user_input, ["news_sentiment_data", "ticker_trends_data"])
-            context = "\n".join(rag_results) if rag_results else "No relevant data found."
+            if rag_results:
+                # Ensure each item is a string before joining
+                context = "\n".join([str(doc) for doc in rag_results])
+            else:
+                context = "No relevant data found."
+            
             prompt = f"User: {user_input}\nContext: {context}"
             response = call_openai_gpt4(prompt)
             st.write(response)
