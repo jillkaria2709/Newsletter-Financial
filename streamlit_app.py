@@ -6,7 +6,10 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
+from bespokelabs import BespokeLabs
 
+# Initialize Bespoke Labs with the API key
+bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
 
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
@@ -23,6 +26,13 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
+def factcheck_with_bespoke(claim, context):
+    try:
+        response = bl.minicheck.factcheck.create(claim=claim, context=context)
+        return response
+    except Exception as e:
+        st.error(f"Error with Bespoke Labs Fact-Check: {e}")
+        return None
 
 def retrieve_from_multiple_rags(query, collections, top_k=5):
     """Search multiple collections for relevant RAG data."""
@@ -178,7 +188,7 @@ tasks = [
 ### Newsletter Generation ###
 
 def generate_newsletter_with_rag():
-    """Generate the newsletter using RAG and agents."""
+    """Generate the newsletter using RAG, agents, and Bespoke Labs fact-check."""
     newsletter_content = []
 
     # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
@@ -191,23 +201,48 @@ def generate_newsletter_with_rag():
     st.write("Executing: Analyze risk data (Risk Analyst)")
     risk_results = risk_analyst.execute_task("Analyze risk data")
 
-    # Step 2: Combine insights for Writer Agent
-    combined_data = [
-        {"role": "Researcher", "content": news_results},
-        {"role": "Market Analyst", "content": trends_results},
-        {"role": "Risk Analyst", "content": risk_results}
-    ]
+    # Step 2: Combine data for context
+    combined_context = (
+        f"News Insights:\n{news_results}\n\n"
+        f"Market Trends:\n{trends_results}\n\n"
+        f"Risk Analysis:\n{risk_results}\n"
+    )
 
-    # Step 3: Generate the newsletter with Writer Agent
+    # Step 3: Perform Fact-Check with Bespoke Labs
+    claim = "newsletter"
+    factcheck_response = factcheck_with_bespoke(claim=claim, context=combined_context)
+    bespoke_factcheck_summary = ""
+    if factcheck_response:
+        bespoke_factcheck_summary = (
+            f"Bespoke Fact-Check Claim: {claim}\n"
+            f"Context: RAG + Agents' Insights\n"
+            f"Support Probability: {factcheck_response.get('support_prob', 'N/A')}\n"
+        )
+    else:
+        bespoke_factcheck_summary = "No fact-check results available."
+
+    # Step 4: Generate the newsletter with Writer Agent
     st.write("Executing: Write the newsletter (Writer)")
-    writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
-    newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
+    writer_task_description = (
+        "Write a cohesive newsletter based on insights from news, market trends, and risk analysis. "
+        "Incorporate fact-check results and generate content accordingly."
+    )
+    newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context, bespoke_factcheck_summary])
 
-    # Step 4: Display the generated newsletter
+    # Step 5: Display the final newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
     else:
-        newsletter_content.append(f"## Writer's Newsletter\n{newsletter}\n")
+        # Add fact-check results and agent responses to the newsletter
+        newsletter_content.append("## Newsletter\n")
+        newsletter_content.append("### Bespoke Labs Fact-Check Results\n")
+        newsletter_content.append(bespoke_factcheck_summary)
+        newsletter_content.append("\n\n### Agent Responses\n")
+        newsletter_content.append(f"**Researcher:** {news_results}\n")
+        newsletter_content.append(f"**Market Analyst:** {trends_results}\n")
+        newsletter_content.append(f"**Risk Analyst:** {risk_results}\n")
+        newsletter_content.append("\n### Generated Newsletter\n")
+        newsletter_content.append(newsletter)
 
     st.subheader("Generated Newsletter")
     st.markdown("\n".join(newsletter_content))
