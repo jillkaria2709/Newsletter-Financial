@@ -75,10 +75,22 @@ def generate_sequential_newsletter(news_insights, market_insights, risk_insights
         """
 
         writer_task_description = (
-            "Write a comprehensive newsletter based on the following insights. "
-            "The newsletter should target an audience familiar with financial markets and economic trends, "
-            "using appropriate financial jargon and terminologies. Focus on key metrics, trends, risks, and "
-            "actionable insights, ensuring the output is concise, informative, and approximately 2,000 tokens in length."
+            "Role: Writer\n"
+            "Goal: Generate a professional financial newsletter.\n"
+            "Task: Write a comprehensive newsletter based on the provided insights. Ensure that:\n\n"
+            "1. All statements are explicitly supported by the provided context.\n"
+            "2. No additional assumptions, extrapolations, or speculative language are included.\n"
+            "3. The newsletter uses financial jargon and concise, fact-based reporting.\n"
+            "4. Avoid editorializing or introducing opinions.\n"
+            "5. Each claim in the newsletter should have a direct connection to the data provided.\n\n"
+            "Use the following structure for clarity:\n"
+            "- **Introduction**: Briefly summarize the key themes (e.g., market trends, risks, technological developments).\n"
+            "- **Section 1**: Detailed analysis of news-related insights (from the Researcher).\n"
+            "- **Section 2**: Market trends and key takeaways (from the Market Analyst).\n"
+            "- **Section 3**: Risk assessments and implications (from the Risk Analyst).\n"
+            "- **Conclusion**: Highlight actionable insights and their potential impact on financial strategies.\n\n"
+            "Ensure that the newsletter is concise, professional, and adheres to a maximum of 2,000 tokens.\n"
+            f"Relevant Data:\n{combined_context}"
         )
         newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context])
 
