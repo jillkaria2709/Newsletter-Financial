@@ -358,13 +358,15 @@ if st.button("Send"):
     else:
         user_input = user_input.strip()
 
-        # Inside Chatbot logic
+        # Case 1: User entered a stock ticker
         if is_ticker_query(user_input):
             st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
             ticker_result = fetch_ticker_price(user_input.upper())
             bot_response = format_ticker_response(ticker_result)
+            st.text(bot_response)  # Use plain text for ticker responses
 
-            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
+        # Case 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
+        else:
             st.write("Searching in stored RAG data...")
             rag_collections = ["news_sentiment_data", "ticker_trends_data"]
             rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
@@ -387,9 +389,10 @@ if st.button("Send"):
                     f"Context from RAG:\n{context}"
                 )
                 bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
+                st.markdown(bot_response)  # Use Markdown for GPT-4-prettified RAG responses
             else:
                 # Fallback to OpenAI GPT-4
+                st.write("No relevant data found in RAG. Falling back to OpenAI...")
                 memory_context = "\n".join(
                     [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
                 )
@@ -400,8 +403,7 @@ if st.button("Send"):
                     f"Query: {user_input}"
                 )
                 bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
+                st.markdown(bot_response)
 
         # Step 3: Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
-
