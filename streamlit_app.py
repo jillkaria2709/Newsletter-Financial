@@ -183,7 +183,11 @@ def generate_newsletter_with_rag():
     ]
 
     st.write("Executing: Write the newsletter (Writer)")
-    writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
+    writer_task_description = (
+    "Write a newsletter based on the provided insights. "
+    "Ensure that key points from the researcher, market analyst, and risk analyst "
+    "are prominently included and explicitly referenced."
+    )
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
 
     if "Error" in newsletter:
