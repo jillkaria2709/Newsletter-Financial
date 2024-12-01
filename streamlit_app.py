@@ -99,14 +99,14 @@ def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
         response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+            model="gpt-4o-mini",  # Ensure this is the correct model name
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correct way to access the content
-        content = response.choices[0].message['content']
+        # Access the content of the first choice correctly
+        content = response.choices[0].message.content
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
