@@ -58,22 +58,20 @@ def retrieve_top_news_articles(collection_name, top_k=3):
         # Access the collection
         collection = client.get_or_create_collection(collection_name)
         
-        # Fetch all documents with a broad query
+        # Fetch all documents
         results = collection.query(
             query_texts=[""],  # Broad query to fetch documents
             n_results=100  # Fetch a large number of results for ranking
         )
         
-        # Check if results contain documents
+        # Check if 'documents' exist in the results
         if 'documents' in results:
             articles = results['documents']
         else:
-            articles = []
-
-        # Debugging: Print the type and contents of articles
-        st.write("Articles Debugging:", type(articles), articles)
+            st.error(f"No documents found in collection {collection_name}.")
+            return []
         
-        # Ensure articles are dictionaries
+        # Parse the articles to ensure they are JSON objects
         parsed_articles = [
             json.loads(article) if isinstance(article, str) else article
             for article in articles
