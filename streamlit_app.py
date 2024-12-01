@@ -6,7 +6,7 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from bespokelabs import BespokeLabs 
+from bespokelabs import BespokeLabs
 
 # Initialize Bespoke Labs
 bl = BespokeLabs(
@@ -28,14 +28,6 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
-def retrieve_from_multiple_rags(query, collections, top_k=3):
-    """Search multiple collections for relevant RAG data."""
-    results = []
-    for collection_name in collections:
-        collection_results = retrieve_from_chromadb(collection_name, query, top_k)
-        results.extend([doc for doc in collection_results if doc])  # Filter empty results
-    return results
-
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
     collection = client.get_or_create_collection(collection_name)
@@ -52,7 +44,7 @@ def fetch_and_update_news_data():
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
-        st.write("News API Response:", data)  # Print the API response
+        st.write("News API Response:", data)
         if 'feed' in data:
             update_chromadb("news_sentiment_data", data['feed'])
             st.success("News data updated in ChromaDB.")
@@ -67,7 +59,7 @@ def fetch_and_update_ticker_trends_data():
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
-        st.write("Ticker Trends API Response:", data)  # Print the API response
+        st.write("Ticker Trends API Response:", data)
         if "top_gainers" in data:
             combined_data = [
                 {"type": "top_gainers", "data": data["top_gainers"]},
@@ -81,17 +73,23 @@ def fetch_and_update_ticker_trends_data():
     except Exception as e:
         st.error(f"Error updating ticker trends data: {e}")
 
-def retrieve_from_chromadb(collection_name, query, top_k=3):
-    """Retrieve relevant documents from ChromaDB."""
+def retrieve_top_news(collection_name, query, top_k=3):
+    """Retrieve top K most relevant news articles based on relevance_score_definition."""
     collection = client.get_or_create_collection(collection_name)
     try:
         results = collection.query(
             query_texts=[query],
-            n_results=top_k
+            n_results=10
         )
-        return results['documents']
+        documents = results['documents']
+        ranked_articles = sorted(
+            documents, 
+            key=lambda x: x.get("relevance_score_definition", 0), 
+            reverse=True
+        )[:top_k]
+        return ranked_articles
     except Exception as e:
-        st.error(f"Error retrieving data from ChromaDB: {e}")
+        st.error(f"Error retrieving data from {collection_name}: {e}")
         return []
 
 def call_openai_gpt4(prompt):
@@ -104,9 +102,7 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correctly access the content from the response
-        content = response.choices[0].message.content
-        return content.strip()
+        return response['choices'][0]['message']['content']
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
@@ -118,81 +114,36 @@ class RAGAgent:
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        """Execute the task using RAG and OpenAI GPT-4 for formatting."""
-        if "news" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
-        elif "trends" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("ticker_trends_data", task_description)
-        else:
-            retrieved_data = []
-
-        combined_data = retrieved_data + (additional_data or [])
-        formatted_data = json.dumps(combined_data, indent=2)
-
+        """Execute the task using RAG data and OpenAI GPT-4 for formatting."""
+        retrieved_data = additional_data or []
+        formatted_data = json.dumps(retrieved_data, indent=2)
         prompt = (
             f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\n\n"
             f"Use ONLY the following RAG data to frame your response:\n{formatted_data}"
         )
-
-        response = call_openai_gpt4(prompt)
-        return response
-
-def get_full_rag_data_from_trends():
-    """Retrieve all documents from the ticker_trends_data collection in ChromaDB."""
-    try:
-        # Access the collection
-        collection = client.get_or_create_collection("ticker_trends_data")
-        
-        # Fetch all documents
-        documents = collection.get_all_documents()  # Adjust based on ChromaDB's API
-        
-        # Optionally structure the data for better readability
-        structured_data = [{"source": doc.get("source"), "content": doc} for doc in documents]
-        return structured_data
-    except Exception as e:
-        st.error(f"Error retrieving RAG data from ticker_trends_data: {e}")
-        return []
-
-def full_rag_data_from_news():
-    """Retrieve all documents from the news_sentiment_data collection in ChromaDB."""
-    try:
-        # Access the collection
-        collection = client.get_or_create_collection("news_sentiment_data")
-        
-        # Fetch all documents
-        documents = collection.get_all_documents()  # Assuming ChromaDB has a method like this
-        
-        # Optionally, you can filter or structure the documents if needed
-        structured_data = [{"source": doc.get("source"), "content": doc} for doc in documents]
-        return structured_data
-    except Exception as e:
-        st.error(f"Error retrieving RAG data from news_sentiment_data: {e}")
-        return []
+        return call_openai_gpt4(prompt)
 
 ### Newsletter Generation ###
 def generate_newsletter_with_rag():
     st.write("Executing: Extract insights from news data (Researcher)")
-    news_results = researcher.execute_task("Extract insights from news data")
+    top_news = retrieve_top_news("news_sentiment_data", "Market trends", top_k=3)
+    news_results = researcher.execute_task("Extract insights from the top 3 news articles.", additional_data=top_news)
 
     st.write("Executing: Analyze market trends (Market Analyst)")
-    trends_results = market_analyst.execute_task("Analyze market trends")
+    trends_results = market_analyst.execute_task("Analyze market trends based on the top 3 news articles.", additional_data=top_news)
 
     st.write("Executing: Analyze risk data (Risk Analyst)")
-    risk_context = [
-        {"source": "news_sentiment_data", "content": news_results},
-        {"source": "ticker_trends_data", "content": trends_results}
-    ]
-    risk_results = risk_analyst.execute_task("Identify risks in the current market landscape", additional_data=risk_context)
+    risk_context = [{"source": "news_sentiment_data", "content": top_news}]
+    risk_results = risk_analyst.execute_task("Identify risks based on the top 3 news articles.", additional_data=risk_context)
 
     context = {
-    "RAG_Data": [full_rag_data_from_news, full_rag_data_from_trends],
-    "Agent_Insights": {
-        "Researcher": news_results,
-        "Market Analyst": trends_results,
-        "Risk Analyst": risk_results
+        "RAG_Data": {"News": top_news},
+        "Agent_Insights": {
+            "Researcher": news_results,
+            "Market Analyst": trends_results,
+            "Risk Analyst": risk_results
+        }
     }
-}
-
 
     st.write("Executing: Write the newsletter (Writer)")
     newsletter = writer.execute_task("Generate a market insights newsletter.", additional_data=context)
@@ -206,7 +157,7 @@ def generate_newsletter_with_rag():
             claim=newsletter,
             context=json.dumps(context)
         )
-        support_prob = getattr(factcheck_response, "support_prob", None)
+        support_prob = factcheck_response.get("support_prob", None)
         if support_prob:
             st.write(f"Fact-Check Support Probability: {support_prob}")
         else:
