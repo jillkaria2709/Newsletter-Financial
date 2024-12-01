@@ -241,7 +241,7 @@ def plot_top_gainers(gainers):
     plt.ylabel("Percentage Gain")
     st.pyplot(plt)
 
-### RAG-Agent Definition ###
+### RAG-Agent with Summarization ###
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
@@ -260,8 +260,13 @@ class RAGAgent:
             combined_data.extend(additional_data)
 
         augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}"
-        summary = call_openai_gpt4(augmented_prompt)
-        return summary
+        result = call_openai_gpt4(augmented_prompt)
+
+        # Summarize the result for future use
+        summary_prompt = f"Summarize this response in 100 words for context-sharing:\n{result}"
+        summary = call_openai_gpt4(summary_prompt)
+
+        return result, summary
 
 ### Agents and Tasks ###
 researcher = RAGAgent(role="Researcher", goal="Process news data")
@@ -269,34 +274,37 @@ market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
 risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
 writer = RAGAgent(role="Writer", goal="Generate newsletter")
 
-### Newsletter Generation ###
-def generate_newsletter_with_rag():
-    newsletter_content = []
-
+### Newsletter Generation with Summaries ###
+def generate_newsletter_with_summaries():
     st.write("Executing: Extract insights from news data (Researcher)")
-    news_results = researcher.execute_task("Extract insights from news data")
+    news_results, news_summary = researcher.execute_task("Extract insights from news data")
 
     st.write("Executing: Analyze market trends (Market Analyst)")
-    trends_results = market_analyst.execute_task("Analyze market trends")
-
-    st.write("Executing: Analyze risk data (Risk Analyst)")
-    risk_results = risk_analyst.execute_task("Analyze risk data")
-
-    combined_context = f"News Insights:\n{news_results}\n\nMarket Trends:\n{trends_results}\n\nRisk Analysis:\n{risk_results}\n"
-
-    claim = "newsletter"
-    factcheck_response = factcheck_with_bespoke(claim=claim, context=combined_context)
-    bespoke_factcheck_summary = (
-        f"Support Probability: {factcheck_response['support_prob']}" if factcheck_response else "No fact-check results available."
+    trends_results, trends_summary = market_analyst.execute_task(
+        "Analyze market trends",
+        additional_data=[news_summary]
     )
 
-    writer_task_description = "Write a cohesive newsletter based on the extracted insights."
-    newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context, bespoke_factcheck_summary])
+    st.write("Executing: Analyze risk data (Risk Analyst)")
+    risk_results, risk_summary = risk_analyst.execute_task(
+        "Analyze risk data",
+        additional_data=[news_summary, trends_summary]
+    )
+
+    combined_summary = f"""
+    News Summary: {news_summary}
+    Market Summary: {trends_summary}
+    Risk Summary: {risk_summary}
+    """
+    st.write("Combined Summary for Writer:", combined_summary)
+
+    writer_task_description = "Write a cohesive newsletter based on these summarized insights."
+    newsletter = writer.execute_task(writer_task_description, additional_data=[combined_summary])
 
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
     else:
-        st.markdown(f"## Newsletter\n### Bespoke Labs Insights\n{bespoke_factcheck_summary}\n### Agent Responses\n{newsletter}")
+        st.markdown(f"## Newsletter\n{newsletter}")
 
 ### Main Buttons ###
 if st.button("Fetch and Store News Data"):
@@ -306,17 +314,8 @@ if st.button("Fetch and Store Trends Data"):
     fetch_and_update_ticker_trends_data()
 
 if st.button("Generate Newsletter"):
-    # Step 1: Fetch and process news data
-    news_insights = send_news_to_researcher()
-
-    # Step 2: Fetch and process market data
-    market_insights = send_market_data_to_analyst()
-
-    # Step 3: Combine and send to Risk Analyst
-    risk_insights = send_to_risk_analyst(news_insights, market_insights)
-
-    # Step 4: Generate newsletter using all insights
-    generate_sequential_newsletter(news_insights, market_insights, risk_insights)
+    generate_newsletter_with_summaries()
+    
 ### Chatbot ###
 st.subheader("Chatbot")
 
