@@ -22,6 +22,30 @@ openai.api_key = st.secrets["openai"]["api_key"]
 st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, Chatbot, and More")
 
 ### Helper Functions ###
+def fetch_ticker_price(ticker):
+    """Fetch the latest price for a given ticker symbol."""
+    url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
+    try:
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
+        if "Time Series (Daily)" in data:
+            latest_date = max(data["Time Series (Daily)"].keys())
+            latest_prices = data["Time Series (Daily)"][latest_date]
+            return {
+                "ticker": ticker,
+                "date": latest_date,
+                "open": latest_prices["1. open"],
+                "high": latest_prices["2. high"],
+                "low": latest_prices["3. low"],
+                "close": latest_prices["4. close"],
+                "volume": latest_prices["5. volume"]
+            }
+        else:
+            return {"error": "Ticker symbol not found or invalid data received."}
+    except Exception as e:
+        return {"error": f"Error fetching ticker data: {e}"}
+
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
@@ -191,21 +215,6 @@ def factcheck_with_bespoke_from_newsletter():
         st.error(f"Error with Bespoke Labs Fact-Check: {e}")
         return None
 
-### Chatbot ###
-st.subheader("Chatbot")
-if "conversation_history" not in st.session_state:
-    st.session_state["conversation_history"] = []
-
-user_input = st.text_input("Ask me something:")
-
-if st.button("Send"):
-    if user_input.strip():
-        results = retrieve_from_chromadb("news_sentiment_data", user_input) + retrieve_from_chromadb("market_data", user_input)
-        context = "\n".join(results) if results else "No relevant data found."
-        response = call_openai_gpt4(f"User Query: {user_input}\nContext: {context}")
-        st.write(f"**Chatbot Response:** {response}")
-        st.session_state["conversation_history"].append({"user": user_input, "bot": response})
-
 ### Buttons for Updating Data ###
 st.subheader("Update Data")
 if st.button("Update News Data"):
@@ -229,3 +238,51 @@ if st.button("Fact-Check Newsletter"):
         st.write("**Fact-Check Result**")
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
+
+### Chatbot ###
+st.subheader("Chatbot")
+if "conversation_history" not in st.session_state:
+    st.session_state["conversation_history"] = []
+
+user_input = st.text_input("Ask me something:")
+
+
+if st.button("Send"):
+    if user_input.strip():
+        response = None
+
+        # Step 1: Check if it's a ticker query
+        if user_input.isalpha() and len(user_input) <= 5:
+            ticker_data = fetch_ticker_price(user_input.upper())
+            if "error" not in ticker_data:
+                response = (
+                    f"**Ticker:** {ticker_data['ticker']}\n"
+                    f"**Date:** {ticker_data['date']}\n"
+                    f"**Open:** {ticker_data['open']}\n"
+                    f"**High:** {ticker_data['high']}\n"
+                    f"**Low:** {ticker_data['low']}\n"
+                    f"**Close:** {ticker_data['close']}\n"
+                    f"**Volume:** {ticker_data['volume']}\n"
+                )
+            else:
+                response = ticker_data["error"]
+
+        # Step 2: Check RAG data from ChromaDB
+        if not response:
+            rag_results = (
+                retrieve_from_chromadb("news_sentiment_data", user_input) +
+                retrieve_from_chromadb("market_data", user_input)
+            )
+            if rag_results:
+                response = " ".join(rag_results)
+
+        # Step 3: Fallback to OpenAI GPT-4
+        if not response:
+            response = call_openai_gpt4(f"User Query: {user_input}")
+
+        # Display response and store in session state
+        st.write(f"**Chatbot Response:** {response}")
+        st.session_state["conversation_history"].append({"user": user_input, "bot": response})
+    else:
+        st.write("Please enter a query.")
+        
