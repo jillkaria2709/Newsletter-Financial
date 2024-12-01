@@ -27,6 +27,89 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, and Chatbot")
 
 ### Helper Functions ###
+def send_news_to_researcher():
+    """Fetch 3 news items and send to Researcher agent."""
+    response = requests.get(news_url)
+    response.raise_for_status()
+    data = response.json()
+
+    if 'feed' in data:
+        news_items = data['feed'][:3]  # Take only the first 3 news items
+        news_insights = researcher.execute_task(
+            task_description="Analyze the following news items.",
+            additional_data=news_items
+        )
+        st.write("Researcher Insights:", news_insights)
+        return news_insights
+    else:
+        st.error("No news data found in API response.")
+        return None
+
+### Step 2: Fetch Data and Send to Market Analyst ###
+
+def send_market_data_to_analyst():
+    """Fetch stock trends and send to Market Analyst agent."""
+    response = requests.get(tickers_url)
+    response.raise_for_status()
+    data = response.json()
+
+    if "top_gainers" in data and "top_losers" in data and "most_actively_traded" in data:
+        market_data = [
+            {"type": "top_gainers", "data": data["top_gainers"][:3]},  # Top 3 gainers
+            {"type": "top_losers", "data": data["top_losers"][:3]},    # Top 3 losers
+            {"type": "most_traded", "data": data["most_actively_traded"][:3]}  # Top 3 traded
+        ]
+        market_insights = market_analyst.execute_task(
+            task_description="Analyze the following market data.",
+            additional_data=market_data
+        )
+        st.write("Market Analyst Insights:", market_insights)
+        return market_insights
+    else:
+        st.error("Invalid data format received from API.")
+        return None
+
+### Step 3: Combine and Send to Risk Analyst ###
+
+def send_to_risk_analyst(news_insights, market_insights):
+    """Send insights from Researcher and Market Analyst to Risk Analyst."""
+    if news_insights and market_insights:
+        combined_insights = [
+            {"role": "Researcher", "content": news_insights},
+            {"role": "Market Analyst", "content": market_insights}
+        ]
+        risk_insights = risk_analyst.execute_task(
+            task_description="Evaluate risks based on the following insights.",
+            additional_data=combined_insights
+        )
+        st.write("Risk Analyst Insights:", risk_insights)
+        return risk_insights
+    else:
+        st.error("Missing insights from Researcher or Market Analyst.")
+        return None
+
+### Step 4: Generate Newsletter with Writer ###
+
+def generate_sequential_newsletter(news_insights, market_insights, risk_insights):
+    """Generate a newsletter using outputs from all three agents."""
+    if news_insights and market_insights and risk_insights:
+        combined_data = [
+            {"role": "Researcher", "content": news_insights},
+            {"role": "Market Analyst", "content": market_insights},
+            {"role": "Risk Analyst", "content": risk_insights}
+        ]
+        writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
+        newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
+
+        # Display the newsletter
+        if "Error" in newsletter:
+            st.error("Failed to generate the newsletter.")
+        else:
+            st.subheader("Generated Newsletter")
+            st.markdown(f"## Writer's Newsletter\n{newsletter}")
+    else:
+        st.error("Missing insights for generating the newsletter.")
+        
 def factcheck_with_bespoke(claim, context):
     """Perform fact-checking using Bespoke Labs."""
     try:
@@ -215,6 +298,25 @@ def generate_newsletter_with_rag():
     else:
         st.markdown(f"## Newsletter\n### Bespoke Labs Insights\n{bespoke_factcheck_summary}\n### Agent Responses\n{newsletter}")
 
+### Main Buttons ###
+if st.button("Fetch and Store News Data"):
+    fetch_and_update_news_data()
+
+if st.button("Fetch and Store Trends Data"):
+    fetch_and_update_ticker_trends_data()
+
+if st.button("Generate Newsletter"):
+    # Step 1: Fetch and process news data
+    news_insights = send_news_to_researcher()
+
+    # Step 2: Fetch and process market data
+    market_insights = send_market_data_to_analyst()
+
+    # Step 3: Combine and send to Risk Analyst
+    risk_insights = send_to_risk_analyst(news_insights, market_insights)
+
+    # Step 4: Generate newsletter using all insights
+    generate_sequential_newsletter(news_insights, market_insights, risk_insights)
 ### Chatbot ###
 st.subheader("Chatbot")
 
@@ -251,12 +353,3 @@ if st.button("Send"):
 
         st.session_state["conversation_history"].append({"user": user_input, "bot": response})
 
-### Main Buttons ###
-if st.button("Fetch and Store News Data"):
-    fetch_and_update_news_data()
-
-if st.button("Fetch and Store Trends Data"):
-    fetch_and_update_ticker_trends_data()
-
-if st.button("Generate Newsletter"):
-    generate_newsletter_with_rag()
