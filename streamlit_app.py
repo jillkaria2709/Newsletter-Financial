@@ -57,15 +57,15 @@ def format_ticker_response(ticker_data):
         return f"Error: {ticker_data['error']}"
 
     return (
-        f"**Ticker**: {ticker_data['ticker']}\n"
-        f"**Date**: {ticker_data['date']}\n"
-        f"**Open Price**: ${float(ticker_data['open']):,.2f}\n"
-        f"**High Price**: ${float(ticker_data['high']):,.2f}\n"
-        f"**Low Price**: ${float(ticker_data['low']):,.2f}\n"
-        f"**Close Price**: ${float(ticker_data['close']):,.2f}\n"
+        f"**Ticker**: {ticker_data['ticker']}  \n"
+        f"**Date**: {ticker_data['date']}  \n"
+        f"**Open Price**: ${float(ticker_data['open']):,.2f}  \n"
+        f"**High Price**: ${float(ticker_data['high']):,.2f}  \n"
+        f"**Low Price**: ${float(ticker_data['low']):,.2f}  \n"
+        f"**Close Price**: ${float(ticker_data['close']):,.2f}  \n"
         f"**Volume**: {int(ticker_data['volume']):,} shares"
     )
-
+    
 ### Define Function ###
 def fetch_ticker_price(ticker):
     """Fetch the latest price for a given ticker symbol."""
