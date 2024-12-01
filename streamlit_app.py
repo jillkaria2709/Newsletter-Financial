@@ -137,6 +137,38 @@ class RAGAgent:
         response = call_openai_gpt4(prompt)
         return response
 
+def get_full_rag_data_from_trends():
+    """Retrieve all documents from the ticker_trends_data collection in ChromaDB."""
+    try:
+        # Access the collection
+        collection = client.get_or_create_collection("ticker_trends_data")
+        
+        # Fetch all documents
+        documents = collection.get_all_documents()  # Adjust based on ChromaDB's API
+        
+        # Optionally structure the data for better readability
+        structured_data = [{"source": doc.get("source"), "content": doc} for doc in documents]
+        return structured_data
+    except Exception as e:
+        st.error(f"Error retrieving RAG data from ticker_trends_data: {e}")
+        return []
+
+def full_rag_data_from_news():
+    """Retrieve all documents from the news_sentiment_data collection in ChromaDB."""
+    try:
+        # Access the collection
+        collection = client.get_or_create_collection("news_sentiment_data")
+        
+        # Fetch all documents
+        documents = collection.get_all_documents()  # Assuming ChromaDB has a method like this
+        
+        # Optionally, you can filter or structure the documents if needed
+        structured_data = [{"source": doc.get("source"), "content": doc} for doc in documents]
+        return structured_data
+    except Exception as e:
+        st.error(f"Error retrieving RAG data from news_sentiment_data: {e}")
+        return []
+
 ### Newsletter Generation ###
 def generate_newsletter_with_rag():
     st.write("Executing: Extract insights from news data (Researcher)")
@@ -152,11 +184,15 @@ def generate_newsletter_with_rag():
     ]
     risk_results = risk_analyst.execute_task("Identify risks in the current market landscape", additional_data=risk_context)
 
-    context = [
-        {"role": "Researcher", "content": news_results},
-        {"role": "Market Analyst", "content": trends_results},
-        {"role": "Risk Analyst", "content": risk_results}
-    ]
+    context = {
+    "RAG_Data": [full_rag_data_from_news, full_rag_data_from_trends],
+    "Agent_Insights": {
+        "Researcher": news_results,
+        "Market Analyst": trends_results,
+        "Risk Analyst": risk_results
+    }
+}
+
 
     st.write("Executing: Write the newsletter (Writer)")
     newsletter = writer.execute_task("Generate a market insights newsletter.", additional_data=context)
