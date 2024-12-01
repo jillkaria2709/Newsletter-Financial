@@ -6,12 +6,11 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from bespokelabs import BespokeLabs
-import bespokelabs
+from bespokelabs import BespokeLabs 
 
-# Initialize Bespoke Labs API
-bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
-
+bl = BespokeLabs(
+    auth_token=st.secrets["bespoke"]["api_key"],
+)
 # Initialize ChromaDB Persistent Client
 client = chromadb.PersistentClient()
 
@@ -27,45 +26,6 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 
 ### Helper Functions ###
-def validate_with_bespoke(newsletter, context):
-    """
-    Validate the newsletter using Bespoke Labs with enhanced error handling.
-    :param newsletter: The generated newsletter content (claim).
-    :param context: The context from RAG data (serialized JSON).
-    :return: Support probability and status message.
-    """
-    try:
-        st.write("Validating the newsletter with Bespoke Labs...")
-        factcheck_response = bl.minicheck.factcheck.create(
-            claim=newsletter,
-            context=json.dumps(context)
-        )
-        support_prob = factcheck_response.get("support_prob", "N/A")
-        if support_prob == "N/A":
-            return None, "Validation returned no support probability."
-        elif support_prob >= 0.8:
-            return support_prob, "The newsletter is highly supported by the context."
-        elif support_prob >= 0.5:
-            return support_prob, "The newsletter has partial support from the context."
-        else:
-            return support_prob, "The newsletter lacks sufficient support from the context."
-    except bespokelabs.APIConnectionError as e:
-        st.error("The server could not be reached. Please check your network connection.")
-        return None, f"Connection error: {e.__cause__}"
-    except bespokelabs.RateLimitError as e:
-        st.error("Rate limit exceeded. Please try again later.")
-        return None, "Rate limit exceeded."
-    except bespokelabs.APIStatusError as e:
-        st.error(f"API returned a non-success status code: {e.status_code}")
-        st.error(f"Response details: {e.response}")
-        return None, f"API error with status code {e.status_code}: {e.response}"
-    except bespokelabs.APIError as e:
-        st.error("An unexpected API error occurred.")
-        return None, f"Unexpected API error: {e}"
-    except Exception as e:
-        st.error("An unknown error occurred.")
-        return None, f"Unknown error: {e}"
-
 
 def retrieve_from_multiple_rags(query, collections, top_k=5):
     """Search multiple collections for relevant RAG data."""
@@ -74,7 +34,6 @@ def retrieve_from_multiple_rags(query, collections, top_k=5):
         collection_results = retrieve_from_chromadb(collection_name, query, top_k)
         results.extend([doc for doc in collection_results if doc])  # Filter empty results
     return results
-
 
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
@@ -85,7 +44,6 @@ def update_chromadb(collection_name, data):
             metadatas=[{"source": item.get("source", "N/A"), "time_published": item.get("time_published", "N/A")}],
             documents=[json.dumps(item)]
         )
-
 
 def fetch_and_update_news_data():
     """Fetch news data from the API and update ChromaDB."""
@@ -101,7 +59,6 @@ def fetch_and_update_news_data():
             st.error("No news data found in API response.")
     except Exception as e:
         st.error(f"Error updating news data: {e}")
-
 
 def fetch_and_update_ticker_trends_data():
     """Fetch ticker trends data from the API and update ChromaDB."""
@@ -123,7 +80,6 @@ def fetch_and_update_ticker_trends_data():
     except Exception as e:
         st.error(f"Error updating ticker trends data: {e}")
 
-
 def retrieve_from_chromadb(collection_name, query, top_k=5):
     """Retrieve relevant documents from ChromaDB."""
     collection = client.get_or_create_collection(collection_name)
@@ -136,7 +92,6 @@ def retrieve_from_chromadb(collection_name, query, top_k=5):
     except Exception as e:
         st.error(f"Error retrieving data from ChromaDB: {e}")
         return []
-
 
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
@@ -155,8 +110,33 @@ def call_openai_gpt4(prompt):
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
 
+def fetch_ticker_price(ticker):
+    """Fetch the latest price for the given ticker."""
+    try:
+        url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
+        response = requests.get(url)
+        response.raise_for_status()
+        data = response.json()
 
-### Newsletter Generation ###
+        if "Time Series (Daily)" in data:
+            latest_date = max(data["Time Series (Daily)"].keys())
+            latest_prices = data["Time Series (Daily)"][latest_date]
+            return {
+                "ticker": ticker,
+                "date": latest_date,
+                "open": latest_prices["1. open"],
+                "high": latest_prices["2. high"],
+                "low": latest_prices["3. low"],
+                "close": latest_prices["4. close"],
+                "volume": latest_prices["5. volume"]
+            }
+        else:
+            return {"error": "Invalid ticker or no data available."}
+    except Exception as e:
+        return {"error": f"Error fetching ticker price: {e}"}
+
+### RAG-Agent Definition ###
+
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
@@ -184,15 +164,24 @@ class RAGAgent:
         summary = call_openai_gpt4(augmented_prompt)
         return summary
 
+### Agents and Tasks ###
 
 researcher = RAGAgent(role="Researcher", goal="Process news data")
 market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
 risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
 writer = RAGAgent(role="Writer", goal="Generate newsletter")
 
+tasks = [
+    {"description": "Extract insights from news data", "agent": researcher},
+    {"description": "Analyze market trends", "agent": market_analyst},
+    {"description": "Analyze risk data", "agent": risk_analyst},
+    {"description": "Write the newsletter", "agent": writer},
+]
+
+### Newsletter Generation ###
 
 def generate_newsletter_with_rag():
-    """Generate the newsletter using RAG and agents."""
+    """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
     newsletter_content = []
 
     # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
@@ -220,13 +209,30 @@ def generate_newsletter_with_rag():
     # Step 4: Display the generated newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
-        return None, combined_data
     else:
         newsletter_content.append(f"## Writer's Newsletter\n{newsletter}\n")
         st.subheader("Generated Newsletter")
         st.markdown("\n".join(newsletter_content))
-        return newsletter, combined_data
 
+    # Step 5: Validate the newsletter with Bespoke Labs
+    try:
+        st.write("Validating the newsletter with Bespoke Labs...")
+        factcheck_response = bl.minicheck.factcheck.create(
+            claim=newsletter,
+            context=json.dumps(combined_data)  # Use combined RAG data as context
+        )
+        support_prob = factcheck_response.get("support_prob", "N/A")
+        st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
+        if support_prob == "N/A":
+            st.error("Bespoke Labs validation returned no support probability.")
+        elif support_prob >= 0.8:
+            st.success("The newsletter is highly supported by the context.")
+        elif support_prob >= 0.5:
+            st.warning("The newsletter has partial support from the context.")
+        else:
+            st.error("The newsletter lacks sufficient support from the context.")
+    except Exception as e:
+        st.error(f"Error during newsletter validation: {e}")
 
 ### Main Page Buttons ###
 if st.button("Fetch and Store News Data"):
@@ -236,20 +242,78 @@ if st.button("Fetch and Store Trends Data"):
     fetch_and_update_ticker_trends_data()
 
 if st.button("Generate Newsletter"):
-    newsletter, rag_context = generate_newsletter_with_rag()
+    generate_newsletter_with_rag()
+### Chatbot UI with Short-Term Memory ###
+st.subheader("Chatbot")
 
-if st.button("Validate Newsletter with Bespoke Labs"):
-    if 'newsletter' not in locals() or newsletter is None:
-        st.error("Please generate the newsletter first.")
+# Initialize session state for conversation history
+if "conversation_history" not in st.session_state:
+    st.session_state["conversation_history"] = []
+
+user_input = st.text_input("Ask me something:")
+
+if st.button("Send"):
+    if len(user_input.strip()) == 0:
+        st.write("Please enter a query.")
     else:
-        support_prob, message = validate_with_bespoke(newsletter, rag_context)
-        if support_prob is not None:
-            st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
-            if support_prob >= 0.8:
-                st.success(message)
-            elif support_prob >= 0.5:
-                st.warning(message)
+        user_input = user_input.strip()
+
+        # Step 1: Check if it's a ticker query
+        if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
+            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
+            ticker_result = fetch_ticker_price(user_input.upper())
+            if "error" in ticker_result:
+                bot_response = f"Error: {ticker_result['error']}"
+                st.error(bot_response)
             else:
-                st.error(message)
+                bot_response = (
+                    f"**Ticker:** {ticker_result['ticker']}\n"
+                    f"**Date:** {ticker_result['date']}\n"
+                    f"**Open:** {ticker_result['open']}\n"
+                    f"**High:** {ticker_result['high']}\n"
+                    f"**Low:** {ticker_result['low']}\n"
+                    f"**Close:** {ticker_result['close']}\n"
+                    f"**Volume:** {ticker_result['volume']}\n"
+                )
+                st.write(bot_response)
         else:
-            st.error(message)
+            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
+            st.write("Searching in stored RAG data...")
+            rag_collections = ["news_sentiment_data", "ticker_trends_data"]
+            rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
+
+            if rag_results:
+                # Combine RAG results into a context for GPT-4
+                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
+                context = "\n".join(
+                    [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
+                )
+                # Include recent conversation history in the prompt
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                )
+                prompt = (
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
+                    f"Query: {user_input}\n\n"
+                    f"Context from RAG:\n{context}"
+                )
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
+            else:
+                # Fallback to OpenAI GPT-4
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                )
+                prompt = (
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
+                    f"Query: {user_input}"
+                )
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
+
+        # Step 3: Update Conversation History
+        st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
