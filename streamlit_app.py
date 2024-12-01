@@ -22,6 +22,51 @@ openai.api_key = st.secrets["openai"]["api_key"]
 st.title("Financial Newsletter generation using Multi-Agent System")
 
 ### Helper Functions ###
+### Helper Functions ###
+def is_ticker_query(user_input):
+    """Determine if the user query is a ticker symbol."""
+    return user_input.isalpha() and len(user_input) <= 5  # Assuming tickers are alphabetic and ≤5 chars
+
+def prettify_openai_response(prompt, retrieved_data):
+    """Use OpenAI to prettify RAG-based answers."""
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant who formats responses professionally."},
+                {"role": "user", "content": f"Here is the context:\n{retrieved_data}\n\nQuestion: {prompt}"}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error prettifying response: {e}"
+
+def retrieve_from_rag(query, collections=["news_sentiment_data", "ticker_trends_data"]):
+    """Retrieve relevant information from RAG."""
+    results = []
+    for collection_name in collections:
+        try:
+            collection = client.get_or_create_collection(collection_name)
+            response = collection.query(query_texts=[query], n_results=3)
+            results.extend(response.get("documents", []))
+        except Exception as e:
+            st.error(f"Error retrieving data from {collection_name}: {e}")
+    return results
+
+def handle_fallback_with_openai(prompt):
+    """Fallback to OpenAI if no specific handler is available."""
+    try:
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=[
+                {"role": "system", "content": "You are a helpful assistant."},
+                {"role": "user", "content": prompt}
+            ]
+        )
+        return response.choices[0].message.content.strip()
+    except Exception as e:
+        return f"Error with OpenAI fallback: {e}"
+
 def retrieve_from_multiple_rags(query, collections, top_k=3):
     """Search multiple collections for relevant RAG data."""
     results = []
@@ -294,7 +339,7 @@ if st.button("Fact-Check Newsletter"):
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
 
-### Modify Chatbot ###
+### Chatbot ###
 st.subheader("Chatbot")
 
 # Initialize session state for conversation history
@@ -309,54 +354,31 @@ if st.button("Send"):
     else:
         user_input = user_input.strip()
 
-        # Construct a prompt for GPT-4
-        memory_context = "\n".join(
-            [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
-        )
-        prompt = (
-            f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-            f"Use the appropriate tool if needed. Respond concisely.\n\n"
-            f"Conversation History:\n{memory_context}\n\n"
-            f"Query: {user_input}\n\n"
-            f"Available Tools:\n{json.dumps(tools, indent=2)}"
-        )
+        # Case 1: User entered a stock ticker
+        if is_ticker_query(user_input):
+            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
+            ticker_result = fetch_ticker_price(user_input.upper())
+            bot_response = format_ticker_response(ticker_result)
 
-        # Call GPT-4 with tools
-        try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a helpful assistant."},
-                    {"role": "user", "content": prompt}
-                ],
-                functions=tools,
-                function_call="auto"
-            )
+        # Case 2: User asked a RAG-related question
+        elif any(keyword in user_input.lower() for keyword in ["news", "trends", "market"]):
+            st.write("Searching in stored RAG data...")
+            rag_results = retrieve_from_rag(user_input)
 
-            # Access function call response correctly
-            message = response.choices[0].message  # Get the message object
-
-            if hasattr(message, "function_call") and message.function_call:
-                # If a function call is made, extract its details
-                tool_name = message.function_call.name
-                parameters = json.loads(message.function_call.arguments)  # Correct attribute is 'arguments'
-                tool_result = handle_tool_call(tool_name, parameters)
-                
-                # Format the response for "fetch_ticker_price" tool
-                if tool_name == "fetch_ticker_price":
-                    bot_response = format_ticker_response(tool_result)
-                else:
-                    bot_response = json.dumps(tool_result, indent=2)
+            if rag_results:
+                # Prettify the RAG results using OpenAI
+                retrieved_data = "\n".join(rag_results)
+                bot_response = prettify_openai_response(user_input, retrieved_data)
             else:
-                # Fallback to direct content response
-                bot_response = message.content.strip()
+                bot_response = "No relevant information found in RAG."
 
-            # Display response
-            st.text(bot_response)  # Use st.text for plain text formatting
+        # Case 3: Fallback to OpenAI
+        else:
+            st.write("Falling back to OpenAI for a response...")
+            bot_response = handle_fallback_with_openai(user_input)
 
-        except Exception as e:
-            st.error(f"Error calling GPT-4 with tools: {e}")
-            bot_response = "I'm sorry, there was an issue processing your request."
+        # Display response
+        st.text(bot_response)
 
         # Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
