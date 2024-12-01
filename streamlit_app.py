@@ -19,7 +19,7 @@ alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, Chatbot, and More")
+st.title("Financial Nrwsletter using Multi-Agent Newsletter")
 
 ### Define Function Schema ###
 tools = [
