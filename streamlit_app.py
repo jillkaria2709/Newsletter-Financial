@@ -65,7 +65,7 @@ def format_ticker_response(ticker_data):
         f"**Close Price**: ${float(ticker_data['close']):,.2f}  \n"
         f"**Volume**: {int(ticker_data['volume']):,} shares"
     )
-    
+
 ### Define Function ###
 def fetch_ticker_price(ticker):
     """Fetch the latest price for a given ticker symbol."""
@@ -323,8 +323,8 @@ if st.button("Send"):
 
         # Call GPT-4 with tools
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
@@ -351,7 +351,7 @@ if st.button("Send"):
                 # Fallback to direct content response
                 bot_response = message.content.strip()
 
-            st.write(bot_response)
+            st.markdown(bot_response)  # Use st.markdown for proper formatting
 
         except Exception as e:
             st.error(f"Error calling GPT-4 with tools: {e}")
