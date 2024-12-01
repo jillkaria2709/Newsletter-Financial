@@ -261,7 +261,7 @@ class RAGAgent:
         augmented_prompt = (
             f"Role: {self.role}\nGoal: {self.goal}\n"
             f"Task: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}\n"
-            "Please ensure the response is concise, focused, and does not exceed 250 words."
+            "Please provide a detailed response of up to 1,800 tokens. Focus on key metrics, trends, and actionable insights."
         )
         result = call_openai_gpt4(augmented_prompt)
         return result
@@ -273,20 +273,20 @@ risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
 writer = RAGAgent(role="Writer", goal="Generate newsletter")
 
 def generate_sequential_newsletter(news_insights, market_insights, risk_insights):
-    """Generate a focused newsletter using outputs from all three agents."""
+    """Generate a focused newsletter using detailed outputs from all three agents."""
     if news_insights and market_insights and risk_insights:
-        combined_data = [
-            {"role": "Researcher", "content": news_insights},
-            {"role": "Market Analyst", "content": market_insights},
-            {"role": "Risk Analyst", "content": risk_insights}
-        ]
+        combined_context = f"""
+        Researcher Insights: {news_insights}
+        Market Analyst Insights: {market_insights}
+        Risk Analyst Insights: {risk_insights}
+        """
 
         writer_task_description = (
-            "Write a cohesive newsletter based on the following insights. "
-            "Ensure the newsletter does not exceed 750 words, focuses on key numbers, and emphasizes actionable information. "
-            "Avoid unnecessary verbosity."
+            "Write a comprehensive newsletter based on the following insights. "
+            "Ensure the newsletter is cohesive, detailed, and approximately 2,000 tokens in length. "
+            "Highlight critical metrics, trends, and risks in a professional tone."
         )
-        newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
+        newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context])
 
         if "Error" in newsletter:
             st.error("Failed to generate the newsletter.")
