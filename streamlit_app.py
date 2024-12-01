@@ -57,13 +57,13 @@ def format_ticker_response(ticker_data):
         return f"Error: {ticker_data['error']}"
 
     return (
-        f"**Ticker**: {ticker_data['ticker']}  \n"
-        f"**Date**: {ticker_data['date']}  \n"
-        f"**Open Price**: ${float(ticker_data['open']):,.2f}  \n"
-        f"**High Price**: ${float(ticker_data['high']):,.2f}  \n"
-        f"**Low Price**: ${float(ticker_data['low']):,.2f}  \n"
-        f"**Close Price**: ${float(ticker_data['close']):,.2f}  \n"
-        f"**Volume**: {int(ticker_data['volume']):,} shares"
+        f"Ticker: {ticker_data['ticker']}\n"
+        f"Date: {ticker_data['date']}\n"
+        f"Open Price: ${float(ticker_data['open']):,.2f}\n"
+        f"High Price: ${float(ticker_data['high']):,.2f}\n"
+        f"Low Price: ${float(ticker_data['low']):,.2f}\n"
+        f"Close Price: ${float(ticker_data['close']):,.2f}\n"
+        f"Volume: {int(ticker_data['volume']):,} shares"
     )
 
 ### Define Function ###
@@ -323,8 +323,8 @@ if st.button("Send"):
 
         # Call GPT-4 with tools
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
@@ -351,7 +351,8 @@ if st.button("Send"):
                 # Fallback to direct content response
                 bot_response = message.content.strip()
 
-            st.markdown(bot_response)  # Use st.markdown for proper formatting
+            # Display response
+            st.text(bot_response)  # Use st.text for plain text formatting
 
         except Exception as e:
             st.error(f"Error calling GPT-4 with tools: {e}")
