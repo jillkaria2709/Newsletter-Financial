@@ -307,7 +307,7 @@ if st.button("Send"):
 
         # Call GPT-4 with tools
         try:
-            response = openai.ChatCompletion.create(
+            response = openai.chat.completions.create(
                 model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
