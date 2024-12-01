@@ -82,9 +82,10 @@ def retrieve_top_news(collection_name, query, top_k=3):
             n_results=10
         )
         documents = results['documents']
+        # Ensure that documents are processed as dictionaries
         ranked_articles = sorted(
-            documents, 
-            key=lambda x: x.get("relevance_score_definition", 0), 
+            [json.loads(doc) for doc in documents],
+            key=lambda x: x.get("relevance_score_definition", 0),
             reverse=True
         )[:top_k]
         return ranked_articles
