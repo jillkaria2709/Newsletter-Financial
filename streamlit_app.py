@@ -286,7 +286,12 @@ if st.button("Send"):
                 # Format RAG results
                 formatted_results = ""
                 for doc in rag_results:
-                    doc_data = json.loads(doc)
+                    # Ensure doc is treated as a dictionary
+                    if isinstance(doc, str):
+                        doc_data = json.loads(doc)  # Convert JSON string to a dictionary
+                    else:
+                        doc_data = doc  # Already a dictionary
+
                     formatted_results += (
                         f"**Title:** {doc_data.get('title', 'N/A')}\n"
                         f"**Source:** {doc_data.get('source', 'N/A')}\n"
