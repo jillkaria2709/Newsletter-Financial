@@ -303,21 +303,31 @@ if st.button("Fetch and Store News Data"):
 if st.button("Fetch and Store Trends Data"):
     fetch_and_update_ticker_trends_data()
 
-if st.button("Generate Newsletter"):
-    # Step 1: Fetch and process news data
-    st.write("Executing: Extract insights from news data (Researcher)")
-    news_insights = researcher.execute_task("Extract insights from news data")
+def generate_sequential_newsletter(news_insights, market_insights, risk_insights):
+    """Generate a professional newsletter using financial jargon and detailed agent outputs."""
+    if news_insights and market_insights and risk_insights:
+        combined_context = f"""
+        Researcher Insights: {news_insights}
+        Market Analyst Insights: {market_insights}
+        Risk Analyst Insights: {risk_insights}
+        """
 
-    # Step 2: Fetch and process market data
-    st.write("Executing: Analyze market trends (Market Analyst)")
-    market_insights = market_analyst.execute_task("Analyze market trends")
+        writer_task_description = (
+            "Write a comprehensive newsletter based on the following insights. "
+            "The newsletter should target an audience familiar with financial markets and economic trends, "
+            "using appropriate financial jargon and terminologies. "
+            "Focus on key metrics, trends, risks, and actionable insights, ensuring the output is concise, "
+            "informative, and approximately 2,000 tokens in length."
+        )
+        newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context])
 
-    # Step 3: Combine and send to Risk Analyst
-    st.write("Executing: Analyze risk data (Risk Analyst)")
-    risk_insights = risk_analyst.execute_task("Analyze risk data", additional_data=[news_insights, market_insights])
-
-    # Step 4: Generate newsletter using all insights
-    generate_sequential_newsletter(news_insights, market_insights, risk_insights)
+        if "Error" in newsletter:
+            st.error("Failed to generate the newsletter.")
+        else:
+            st.subheader("Generated Newsletter")
+            st.markdown(f"## Writer's Newsletter\n{newsletter}")
+    else:
+        st.error("Missing insights for generating the newsletter.")
 
 ### Chatbot ###
 st.subheader("Chatbot")
