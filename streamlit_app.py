@@ -53,7 +53,7 @@ def factcheck_with_bespoke_from_newsletter(newsletter):
     context_sources = [
         "https://www.alphavantage.co",  # Example financial API site
         "https://www.bespokepremium.com",  # Bespoke Premium site
-        "https://www.marketwatch.com",  # MarketWatch for financial news
+        "https://www.bloomberg.com/",  # MarketWatch for financial news
     ]
 
     context = ""
