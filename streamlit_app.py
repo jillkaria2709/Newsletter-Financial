@@ -97,14 +97,15 @@ def retrieve_from_chromadb(collection_name, query, top_k=3):
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a helpful assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
-        content = response.choices[0].content.message
+        # Access the content correctly
+        content = response['choices'][0]['message']['content']
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
