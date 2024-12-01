@@ -373,7 +373,6 @@ if st.button("Send"):
 
             if rag_results:
                 # Combine RAG results into a context for GPT-4
-                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
                 context = "\n".join(
                     [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
                 )
