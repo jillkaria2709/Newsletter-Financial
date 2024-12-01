@@ -199,23 +199,27 @@ def generate_newsletter_with_rag():
             claim=newsletter,
             context=json.dumps(combined_data)  # Use combined RAG data as context
         )
-        
-        # Debugging: Display the raw response
-        st.write("Factcheck Response:", factcheck_response)
 
-        # Access support_prob directly from the response
-        support_prob = factcheck_response["support_prob"]
-        st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
-        
-        # Add conditional logic to handle the support probability
-        if support_prob >= 0.8:
-            st.success("The newsletter is highly supported by the context.")
-        elif support_prob >= 0.5:
-            st.warning("The newsletter has partial support from the context.")
+        # Debugging: Display the raw response object
+        st.write("Factcheck Response (Raw):", factcheck_response)
+
+        # Access support_prob as an attribute, not a dictionary key
+        support_prob = getattr(factcheck_response, "support_prob", None)
+
+        if support_prob is None:
+            st.error("Validation returned no support probability.")
         else:
-            st.error("The newsletter lacks sufficient support from the context.")
-    except KeyError:
-        st.error("The 'support_prob' key is missing in the response.")
+            st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
+            
+            # Add conditional logic to handle the support probability
+            if support_prob >= 0.8:
+                st.success("The newsletter is highly supported by the context.")
+            elif support_prob >= 0.5:
+                st.warning("The newsletter has partial support from the context.")
+            else:
+                st.error("The newsletter lacks sufficient support from the context.")
+    except AttributeError:
+        st.error("The 'support_prob' attribute is missing in the response.")
     except Exception as e:
         st.error(f"Error during newsletter validation: {e}")
 
