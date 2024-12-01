@@ -250,68 +250,77 @@ if st.button("Fact-Check Newsletter"):
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
 
+### Chatbot UI with Short-Term Memory ###
 st.subheader("Chatbot")
 
+# Initialize session state for conversation history
 if "conversation_history" not in st.session_state:
     st.session_state["conversation_history"] = []
 
 user_input = st.text_input("Ask me something:")
 
 if st.button("Send"):
-    if not user_input.strip():
+    if len(user_input.strip()) == 0:
         st.write("Please enter a query.")
     else:
-        # Check for ticker symbol
-        if user_input.isalpha() and len(user_input) <= 5:
-            ticker_data = fetch_ticker_price(user_input.upper())
-            if "error" in ticker_data:
-                response = f"Error: {ticker_data['error']}"
+        user_input = user_input.strip()
+
+        # Step 1: Check if it's a ticker query
+        if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
+            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
+            ticker_result = fetch_ticker_price(user_input.upper())
+            if "error" in ticker_result:
+                bot_response = f"Error: {ticker_result['error']}"
+                st.error(bot_response)
             else:
-                # Format ticker data
-                response = (
-                    f"### Ticker Information: {ticker_data['ticker']}\n"
-                    f"- **Date:** {ticker_data['date']}\n"
-                    f"- **Open Price:** {ticker_data['open']}\n"
-                    f"- **High Price:** {ticker_data['high']}\n"
-                    f"- **Low Price:** {ticker_data['low']}\n"
-                    f"- **Close Price:** {ticker_data['close']}\n"
-                    f"- **Volume:** {ticker_data['volume']}\n"
+                bot_response = (
+                    f"**Ticker:** {ticker_result['ticker']}\n"
+                    f"**Date:** {ticker_result['date']}\n"
+                    f"**Open:** {ticker_result['open']}\n"
+                    f"**High:** {ticker_result['high']}\n"
+                    f"**Low:** {ticker_result['low']}\n"
+                    f"**Close:** {ticker_result['close']}\n"
+                    f"**Volume:** {ticker_result['volume']}\n"
                 )
+                st.write(bot_response)
         else:
-            # Query RAG
-            rag_results = retrieve_from_multiple_rags(
-                user_input, ["news_sentiment_data", "ticker_trends_data"]
-            )
+            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
+            st.write("Searching in stored RAG data...")
+            rag_collections = ["news_sentiment_data", "ticker_trends_data"]
+            rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
+
             if rag_results:
-                # Format RAG results
-                formatted_results = ""
-                for doc in rag_results:
-                    # Ensure doc is treated as a dictionary
-                    if isinstance(doc, str):
-                        doc_data = json.loads(doc)  # Convert JSON string to a dictionary
-                    else:
-                        doc_data = doc  # Already a dictionary
-
-                    formatted_results += (
-                        f"**Title:** {doc_data.get('title', 'N/A')}\n"
-                        f"**Source:** {doc_data.get('source', 'N/A')}\n"
-                        f"**Published:** {doc_data.get('time_published', 'N/A')}\n"
-                        f"**Summary:** {doc_data.get('summary', 'N/A')}\n"
-                        f"**URL:** {doc_data.get('url', 'N/A')}\n\n"
-                    )
-                response = f"### Relevant RAG Results:\n{formatted_results}"
+                # Combine RAG results into a context for GPT-4
+                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
+                context = "\n".join(
+                    [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
+                )
+                # Include recent conversation history in the prompt
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                )
+                prompt = (
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
+                    f"Query: {user_input}\n\n"
+                    f"Context from RAG:\n{context}"
+                )
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
             else:
-                # Fallback to GPT-4
-                prompt = f"User: {user_input}\nContext: No relevant RAG data found."
-                response = call_openai_gpt4(prompt)
+                # Fallback to OpenAI GPT-4
+                memory_context = "\n".join(
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                )
+                prompt = (
+                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"Provide a relevant and well-framed response.\n\n"
+                    f"Conversation History:\n{memory_context}\n\n"
+                    f"Query: {user_input}"
+                )
+                bot_response = call_openai_gpt4(prompt)
+                st.write(bot_response)
 
-        # Display response
-        st.write(response)
-        st.session_state["conversation_history"].append({"user": user_input, "bot": response})
-
-# Display the conversation history
-if st.session_state["conversation_history"]:
-    st.markdown("### Chat History")
-    for exchange in st.session_state["conversation_history"]:
-        st.markdown(f"**You:** {exchange['user']}")
-        st.markdown(f"**Bot:** {exchange['bot']}")
+        # Step 3: Update Conversation History
+        st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
