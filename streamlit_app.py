@@ -99,20 +99,20 @@ tools = [
     }
 ]
 
-### Formatting Function ###
 def format_ticker_response(ticker_data):
     """Format the ticker data for better readability."""
     if "error" in ticker_data:
         return f"Error: {ticker_data['error']}"
 
+    # Properly formatted response with plain text
     return (
-        f"Ticker: {ticker_data['ticker']}\n"
-        f"Date: {ticker_data['date']}\n"
-        f"Open Price: ${float(ticker_data['open']):,.2f}\n"
-        f"High Price: ${float(ticker_data['high']):,.2f}\n"
-        f"Low Price: ${float(ticker_data['low']):,.2f}\n"
-        f"Close Price: ${float(ticker_data['close']):,.2f}\n"
-        f"Volume: {int(ticker_data['volume']):,} shares"
+        f"**Ticker**: {ticker_data['ticker']}  \n"
+        f"**Date**: {ticker_data['date']}  \n"
+        f"**Open Price**: ${float(ticker_data['open']):,.2f}  \n"
+        f"**High Price**: ${float(ticker_data['high']):,.2f}  \n"
+        f"**Low Price**: ${float(ticker_data['low']):,.2f}  \n"
+        f"**Close Price**: ${float(ticker_data['close']):,.2f}  \n"
+        f"**Volume**: {int(ticker_data['volume']):,} shares"
     )
 
 ### Define Function ###
