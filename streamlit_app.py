@@ -33,23 +33,19 @@ def retrieve_from_multiple_rags(query, collections, top_k=3):
             st.error(f"Error retrieving data from collection {collection_name}: {e}")
     return results
 
-### Define Tool Schema ###
 tools = [
     {
-        "type": "function",
-        "function": {
-            "name": "fetch_ticker_price",
-            "description": "Fetch the latest price for a given stock ticker symbol.",
-            "parameters": {
-                "type": "object",
-                "properties": {
-                    "ticker": {
-                        "type": "string",
-                        "description": "The stock ticker symbol (e.g., AAPL, MSFT)."
-                    }
-                },
-                "required": ["ticker"]
-            }
+        "name": "fetch_ticker_price",  # The required 'name' parameter
+        "description": "Fetch the latest price for a given stock ticker symbol.",
+        "parameters": {
+            "type": "object",
+            "properties": {
+                "ticker": {
+                    "type": "string",
+                    "description": "The stock ticker symbol (e.g., AAPL, MSFT)."
+                }
+            },
+            "required": ["ticker"]
         }
     }
 ]
@@ -311,13 +307,13 @@ if st.button("Send"):
 
         # Call GPT-4 with tools
         try:
-            response = openai.chat.completions.create(
-                model="gpt-4o-mini",
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
                 messages=[
                     {"role": "system", "content": "You are a helpful assistant."},
                     {"role": "user", "content": prompt}
                 ],
-                functions=tools,
+                functions=tools,  # Corrected structure for tools
                 function_call="auto"
             )
 
