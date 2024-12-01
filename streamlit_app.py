@@ -22,6 +22,17 @@ openai.api_key = st.secrets["openai"]["api_key"]
 st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, Chatbot, and More")
 
 ### Helper Functions ###
+def retrieve_from_multiple_rags(query, collections, top_k=3):
+    """Search multiple collections for relevant RAG data."""
+    results = []
+    for collection_name in collections:
+        try:
+            collection_results = retrieve_from_chromadb(collection_name, query, top_k)
+            results.extend(collection_results)  # Combine results from all collections
+        except Exception as e:
+            st.error(f"Error retrieving data from collection {collection_name}: {e}")
+    return results
+
 def fetch_ticker_price(ticker):
     """Fetch the latest price for a given ticker symbol."""
     url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
