@@ -64,18 +64,29 @@ def retrieve_top_news_articles(collection_name, top_k=3):
             n_results=100  # Fetch a large number of results for ranking
         )
         
-        # Assume results directly return a list of documents
-        if isinstance(results, list):
+        # Directly handle the case where results are a list
+        if isinstance(results, dict) and 'documents' in results:
+            articles = [
+                json.loads(doc) if isinstance(doc, str) else doc
+                for doc in results['documents']
+            ]
+        elif isinstance(results, list):
             articles = [
                 json.loads(doc) if isinstance(doc, str) else doc
                 for doc in results
             ]
         else:
-            articles = results.get('documents', [])
+            articles = []
         
-        # Sort by relevance_score_definition
+        # Ensure each article is a dictionary
+        parsed_articles = [
+            article if isinstance(article, dict) else json.loads(article)
+            for article in articles
+        ]
+        
+        # Sort articles by `relevance_score_definition`
         sorted_articles = sorted(
-            articles,
+            parsed_articles,
             key=lambda x: x.get("relevance_score_definition", 0),
             reverse=True
         )
