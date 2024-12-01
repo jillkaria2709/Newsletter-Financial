@@ -57,35 +57,47 @@ def retrieve_top_news_articles(collection_name, top_k=3):
     try:
         # Access the collection
         collection = client.get_or_create_collection(collection_name)
-        
+
         # Fetch all documents
         results = collection.query(
             query_texts=[""],  # Broad query to fetch documents
             n_results=100  # Fetch a large number of results for ranking
         )
         
-        # Check if 'documents' exist in the results
-        if 'documents' in results:
-            articles = results['documents']
-        else:
-            st.error(f"No documents found in collection {collection_name}.")
+        # Ensure the results have documents
+        raw_articles = results.get('documents', [])
+        if not raw_articles:
+            st.error("No articles found in the collection.")
             return []
-        
-        # Parse the articles to ensure they are JSON objects
-        parsed_articles = [
-            json.loads(article) if isinstance(article, str) else article
-            for article in articles
-        ]
-        
+
+        # Parse the articles as JSON objects
+        parsed_articles = []
+        for article in raw_articles:
+            try:
+                if isinstance(article, str):
+                    parsed_articles.append(json.loads(article))  # Parse strings as JSON
+                elif isinstance(article, dict):
+                    parsed_articles.append(article)  # Already a dict
+                else:
+                    st.warning(f"Skipped unsupported article format: {article}")
+            except json.JSONDecodeError:
+                st.warning(f"Skipped invalid JSON article: {article}")
+
+        # Handle empty parsed articles
+        if not parsed_articles:
+            st.error("No valid articles to process after parsing.")
+            return []
+
         # Sort articles by `relevance_score_definition`
         sorted_articles = sorted(
             parsed_articles,
-            key=lambda x: x.get("relevance_score_definition", 0),
+            key=lambda x: x.get("relevance_score_definition", 0),  # Safely access key
             reverse=True
         )
-        
+
         # Return the top K articles
         return sorted_articles[:top_k]
+
     except Exception as e:
         st.error(f"Error retrieving top articles from {collection_name}: {e}")
         return []
