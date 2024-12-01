@@ -358,15 +358,16 @@ if st.button("Send"):
     else:
         user_input = user_input.strip()
 
-        # Case 1: User entered a stock ticker
-        if is_ticker_query(user_input):
-            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
-            ticker_result = fetch_ticker_price(user_input.upper())
-            bot_response = format_ticker_response(ticker_result)
-            st.text(bot_response)  # Use plain text for ticker responses
-
-        # Case 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
+        # Case 1: Match with tool
+        for tool in tools:
+            if tool["name"] == "fetch_ticker_price" and is_ticker_query(user_input):
+                parameters = {"ticker": user_input.upper()}
+                tool_result = handle_tool_call(tool["name"], parameters)
+                bot_response = format_ticker_response(tool_result)
+                st.text(bot_response)  # Use plain text for ticker responses
+                break
         else:
+            # Case 2: Default to RAG or OpenAI
             st.write("Searching in stored RAG data...")
             rag_collections = ["news_sentiment_data", "ticker_trends_data"]
             rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
@@ -376,33 +377,19 @@ if st.button("Send"):
                 context = "\n".join(
                     [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
                 )
-                # Include recent conversation history in the prompt
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
-                )
                 prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+                    f"You are a helpful assistant. Below is the user's query and context. "
                     f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
                     f"Query: {user_input}\n\n"
-                    f"Context from RAG:\n{context}"
+                    f"Context:\n{context}"
                 )
                 bot_response = call_openai_gpt4(prompt)
                 st.markdown(bot_response)  # Use Markdown for GPT-4-prettified RAG responses
             else:
                 # Fallback to OpenAI GPT-4
                 st.write("No relevant data found in RAG. Falling back to OpenAI...")
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
-                )
-                prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-                    f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
-                    f"Query: {user_input}"
-                )
-                bot_response = call_openai_gpt4(prompt)
+                bot_response = call_openai_gpt4(user_input)
                 st.markdown(bot_response)
 
-        # Step 3: Update Conversation History
+        # Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
