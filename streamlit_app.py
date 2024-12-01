@@ -55,20 +55,29 @@ def fetch_and_update_news_data():
 def retrieve_top_news_articles(collection_name, top_k=3):
     """Retrieve top K news articles based on relevance_score_definition."""
     try:
+        # Access the collection
         collection = client.get_or_create_collection(collection_name)
+        
+        # Fetch all documents with a broad query
         results = collection.query(
             query_texts=[""],  # Perform a broad query to fetch all documents
             n_results=100  # Fetch a large number of documents for sorting
         )
+        
+        # Ensure results['documents'] is treated as a list of JSON strings or objects
         articles = [
             json.loads(doc) if isinstance(doc, str) else doc
-            for doc in results['documents']
+            for doc in results.get('documents', [])
         ]
+        
+        # Sort by relevance_score_definition
         sorted_articles = sorted(
             articles,
             key=lambda x: x.get("relevance_score_definition", 0),
             reverse=True
         )
+        
+        # Return the top K articles
         return sorted_articles[:top_k]
     except Exception as e:
         st.error(f"Error retrieving top articles from {collection_name}: {e}")
