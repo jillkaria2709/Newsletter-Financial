@@ -82,7 +82,7 @@ def fetch_and_update_ticker_trends_data():
     except Exception as e:
         st.error(f"Error updating ticker trends data: {e}")
 
-def retrieve_from_chromadb(collection_name, query, top_k=5):
+def retrieve_from_chromadb(collection_name, query, top_k=3):
     """Retrieve relevant documents from ChromaDB."""
     collection = client.get_or_create_collection(collection_name)
     try:
