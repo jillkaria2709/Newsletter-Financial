@@ -64,17 +64,18 @@ def retrieve_top_news_articles(collection_name, top_k=3):
             n_results=100  # Fetch a large number of results for ranking
         )
         
-        # Handle results that are directly a list of articles
-        if isinstance(results, dict) and 'documents' in results:
+        # Check if results contain documents
+        if 'documents' in results:
             articles = results['documents']
-        elif isinstance(results, list):
-            articles = results
         else:
             articles = []
 
-        # Ensure each article is a dictionary
+        # Debugging: Print the type and contents of articles
+        st.write("Articles Debugging:", type(articles), articles)
+        
+        # Ensure articles are dictionaries
         parsed_articles = [
-            article if isinstance(article, dict) else json.loads(article)
+            json.loads(article) if isinstance(article, str) else article
             for article in articles
         ]
         
