@@ -261,32 +261,52 @@ if st.button("Send"):
     if not user_input.strip():
         st.write("Please enter a query.")
     else:
-        # Step 1: Check for ticker symbol
-        if user_input.isalpha() and len(user_input) <= 5:  # Assuming ticker symbols are alphanumeric and <= 5 chars
+        # Check for ticker symbol
+        if user_input.isalpha() and len(user_input) <= 5:
             ticker_data = fetch_ticker_price(user_input.upper())
             if "error" in ticker_data:
                 response = f"Error: {ticker_data['error']}"
             else:
+                # Format ticker data
                 response = (
-                    f"**Ticker:** {ticker_data['ticker']}\n"
-                    f"**Date:** {ticker_data['date']}\n"
-                    f"**Open:** {ticker_data['open']}\n"
-                    f"**High:** {ticker_data['high']}\n"
-                    f"**Low:** {ticker_data['low']}\n"
-                    f"**Close:** {ticker_data['close']}\n"
-                    f"**Volume:** {ticker_data['volume']}\n"
+                    f"### Ticker Information: {ticker_data['ticker']}\n"
+                    f"- **Date:** {ticker_data['date']}\n"
+                    f"- **Open Price:** {ticker_data['open']}\n"
+                    f"- **High Price:** {ticker_data['high']}\n"
+                    f"- **Low Price:** {ticker_data['low']}\n"
+                    f"- **Close Price:** {ticker_data['close']}\n"
+                    f"- **Volume:** {ticker_data['volume']}\n"
                 )
         else:
-            # Step 2: Try RAG for factual data
-            rag_results = retrieve_from_multiple_rags(user_input, ["news_sentiment_data", "ticker_trends_data"])
+            # Query RAG
+            rag_results = retrieve_from_multiple_rags(
+                user_input, ["news_sentiment_data", "ticker_trends_data"]
+            )
             if rag_results:
-                response = " ".join([str(doc) for doc in rag_results])  # Ensure all items are strings
+                # Format RAG results
+                formatted_results = ""
+                for doc in rag_results:
+                    doc_data = json.loads(doc)
+                    formatted_results += (
+                        f"**Title:** {doc_data.get('title', 'N/A')}\n"
+                        f"**Source:** {doc_data.get('source', 'N/A')}\n"
+                        f"**Published:** {doc_data.get('time_published', 'N/A')}\n"
+                        f"**Summary:** {doc_data.get('summary', 'N/A')}\n"
+                        f"**URL:** {doc_data.get('url', 'N/A')}\n\n"
+                    )
+                response = f"### Relevant RAG Results:\n{formatted_results}"
             else:
-                # Step 3: Fallback to OpenAI GPT-4 for generic queries
+                # Fallback to GPT-4
                 prompt = f"User: {user_input}\nContext: No relevant RAG data found."
                 response = call_openai_gpt4(prompt)
 
-        # Display the chatbot response
+        # Display response
         st.write(response)
-        # Update conversation history
         st.session_state["conversation_history"].append({"user": user_input, "bot": response})
+
+# Display the conversation history
+if st.session_state["conversation_history"]:
+    st.markdown("### Chat History")
+    for exchange in st.session_state["conversation_history"]:
+        st.markdown(f"**You:** {exchange['user']}")
+        st.markdown(f"**Bot:** {exchange['bot']}")
