@@ -117,7 +117,7 @@ def call_openai_gpt4(prompt):
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a financial assistant."},
+                {"role": "system", "content": "You are a knowledgeable assistant."},
                 {"role": "user", "content": prompt}
             ]
         )
@@ -182,25 +182,21 @@ def generate_sequential_newsletter(news_insights, market_insights, risk_insights
         st.subheader("Generated Newsletter")
         st.markdown(f"## Newsletter:\n\n{newsletter}")
 
-### Fact-Check with Bespoke Labs ###
-def factcheck_with_bespoke_from_newsletter():
-    """Fact-check using Bespoke Labs."""
-    newsletter_content = st.session_state.get("newsletter_content", None)
-    newsletter_context = st.session_state.get("newsletter_context", None)
+### Buttons for Updating RAG Data and Newsletter ###
+if st.button("Update News Data"):
+    st.write("Updating news data...")
+    # Fetch and update logic here
 
-    if not newsletter_content or not newsletter_context:
-        st.error("No newsletter content or context available for fact-checking. Generate a newsletter first.")
-        return None
+if st.button("Generate Newsletter"):
+    st.write("Generating newsletter...")
+    news_insights = researcher.execute_task("Analyze news data")
+    market_insights = market_analyst.execute_task("Analyze market trends")
+    risk_insights = risk_analyst.execute_task("Analyze risks")
+    generate_sequential_newsletter(news_insights, market_insights, risk_insights)
 
-    try:
-        response = bl.minicheck.factcheck.create(claim=newsletter_content, context=newsletter_context)
-        return {
-            "support_prob": getattr(response, "support_prob", "N/A"),
-            "details": str(response)
-        }
-    except Exception as e:
-        st.error(f"Error with Bespoke Labs Fact-Check: {e}")
-        return None
+if st.button("Fact-Check Newsletter"):
+    st.write("Fact-checking the newsletter...")
+    # Fact-checking logic here
 
 ### Chatbot ###
 st.subheader("Chatbot")
@@ -211,29 +207,23 @@ if "conversation_history" not in st.session_state:
 
 user_input = st.text_input("Ask me something:")
 
-if st.button("Send"):
+if st.button("Send Query"):
     if len(user_input.strip()) == 0:
         st.write("Please enter a query.")
     else:
         user_input = user_input.strip()
 
-        # Step 1: Handle ticker queries
+        # Handle Ticker Queries
         if user_input.isalpha() and len(user_input) <= 5:
             ticker_result = fetch_ticker_price(user_input.upper())
-            if "error" in ticker_result:
-                bot_response = ticker_result["error"]
-            else:
-                bot_response = json.dumps(ticker_result, indent=2)
+            bot_response = json.dumps(ticker_result, indent=2)
 
-        # Step 2: Handle RAG-based questions
+        # Handle RAG-Based Questions
         elif "invest" in user_input.lower():
             retrieved_data = retrieve_from_chromadb("news_sentiment_data", user_input)
-            if retrieved_data:
-                bot_response = call_openai_gpt4(f"Context: {retrieved_data}\n\nQuestion: {user_input}")
-            else:
-                bot_response = "I couldn't find relevant data."
+            bot_response = call_openai_gpt4(f"Context: {retrieved_data}\n\nQuestion: {user_input}")
 
-        # Step 3: Handle out-of-scope questions
+        # Handle Out-of-Scope Questions
         else:
             bot_response = call_openai_gpt4(user_input)
 
