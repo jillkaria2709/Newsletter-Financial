@@ -25,8 +25,8 @@ st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, and Chatbot")
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        response = openai.chat.completions.create(
-            model="gpt-4o-mini",
+        response = openai.ChatCompletion.create(
+            model="gpt-4",
             messages=[
                 {"role": "system", "content": "You are a financial assistant."},
                 {"role": "user", "content": prompt}
@@ -38,13 +38,34 @@ def call_openai_gpt4(prompt):
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
 
+def retrieve_from_chromadb(collection_name, query, top_k=3):
+    """Retrieve relevant documents from ChromaDB."""
+    collection = client.get_or_create_collection(collection_name)
+    try:
+        results = collection.query(
+            query_texts=[query],
+            n_results=top_k
+        )
+        return results['documents']
+    except Exception as e:
+        st.error(f"Error retrieving data from ChromaDB: {e}")
+        return []
+
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        retrieved_data = []  # Placeholder for ChromaDB or any RAG retrieval
+        # Fetch relevant data from ChromaDB collections based on the role
+        if "news" in self.goal.lower():
+            retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
+        elif "trends" in self.goal.lower():
+            retrieved_data = retrieve_from_chromadb("ticker_trends_data", task_description)
+        elif "risks" in self.goal.lower():
+            retrieved_data = retrieve_from_chromadb("risk_analysis_data", task_description)
+        else:
+            retrieved_data = []
 
         combined_data = retrieved_data
         if additional_data:
