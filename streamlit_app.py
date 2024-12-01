@@ -197,20 +197,25 @@ def generate_newsletter_with_rag():
         st.write("Validating the newsletter with Bespoke Labs...")
         factcheck_response = bl.minicheck.factcheck.create(
             claim=newsletter,
-            context=json.dumps(combined_data)
+            context=json.dumps(combined_data)  # Use combined RAG data as context
         )
+        
+        # Debugging: Display the raw response
         st.write("Factcheck Response:", factcheck_response)
 
-        support_prob = factcheck_response.get("support_prob", "N/A")
+        # Access support_prob directly from the response
+        support_prob = factcheck_response["support_prob"]
         st.write(f"Newsletter Fact-Check Support Probability: {support_prob}")
-        if support_prob == "N/A":
-            st.error("Bespoke Labs validation returned no support probability.")
-        elif support_prob >= 0.8:
+        
+        # Add conditional logic to handle the support probability
+        if support_prob >= 0.8:
             st.success("The newsletter is highly supported by the context.")
         elif support_prob >= 0.5:
             st.warning("The newsletter has partial support from the context.")
         else:
             st.error("The newsletter lacks sufficient support from the context.")
+    except KeyError:
+        st.error("The 'support_prob' key is missing in the response.")
     except Exception as e:
         st.error(f"Error during newsletter validation: {e}")
 
