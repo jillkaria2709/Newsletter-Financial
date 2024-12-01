@@ -180,6 +180,7 @@ def generate_newsletter_with_rag():
     """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
     newsletter_content = []
 
+    # Step 1: Execute Tasks for Each Agent
     st.write("Executing: Extract insights from news data (Researcher)")
     news_results = researcher.execute_task("Extract insights from news data")
 
@@ -189,12 +190,14 @@ def generate_newsletter_with_rag():
     st.write("Executing: Analyze risk data (Risk Analyst)")
     risk_results = risk_analyst.execute_task("Analyze risk data")
 
+    # Step 2: Combine Agent Outputs as Context
     combined_data = [
         {"role": "Researcher", "content": news_results},
         {"role": "Market Analyst", "content": trends_results},
         {"role": "Risk Analyst", "content": risk_results}
     ]
 
+    # Step 3: Write the Newsletter (Writer Agent)
     st.write("Executing: Write the newsletter (Writer)")
     writer_task_description = (
         "Write a cohesive newsletter using ONLY the provided insights from RAG data. "
@@ -202,6 +205,7 @@ def generate_newsletter_with_rag():
     )
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
 
+    # Step 4: Display the Generated Newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
     else:
@@ -209,14 +213,22 @@ def generate_newsletter_with_rag():
         st.subheader("Generated Newsletter")
         st.markdown("\n".join(newsletter_content))
 
-    # Validate the newsletter using Bespoke Labs
+    # Step 5: Validate the Newsletter with Bespoke Labs
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
+        
+        # Combine all agent outputs for the context
+        context = {agent["role"]: agent["content"] for agent in combined_data}
+        
+        # Debugging: Display the context passed to Bespoke Labs
+        st.write("Validation Context:", context)
+
         factcheck_response = bl.minicheck.factcheck.create(
-            claim=newsletter,
-            context=json.dumps(combined_data)  # Use combined RAG data as context
+            claim=newsletter,  # Use the generated newsletter as the claim
+            context=json.dumps(context)  # Use combined agent outputs as the context
         )
 
+        # Step 6: Display the Factcheck Response
         st.write("Factcheck Response (Raw):", factcheck_response)
         support_prob = getattr(factcheck_response, "support_prob", None)
 
