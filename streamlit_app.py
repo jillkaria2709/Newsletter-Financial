@@ -368,7 +368,6 @@ if st.button("Send"):
                 break
         else:
             # Case 2: Default to RAG or OpenAI
-            st.write("Searching in stored RAG data...")
             rag_collections = ["news_sentiment_data", "ticker_trends_data"]
             rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
 
