@@ -20,7 +20,6 @@ client = chromadb.PersistentClient()
 alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
 
-# API URLs for Alpha Vantage
 news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50'
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
@@ -28,22 +27,6 @@ tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&ap
 st.title("Alpha Vantage Multi-Agent System with RAG, GPT-4, and Bespoke Labs")
 
 ### Helper Functions ###
-
-def retrieve_top_news_articles(collection_name, top_k=3):
-    """Retrieve top K news articles based on relevance_score_definition."""
-    try:
-        collection = client.get_or_create_collection(collection_name)
-        documents = collection.get_all_documents()  # Fetch all documents from the collection
-        articles = [json.loads(doc) if isinstance(doc, str) else doc for doc in documents]
-        sorted_articles = sorted(
-            articles,
-            key=lambda x: x.get("relevance_score_definition", 0),
-            reverse=True
-        )
-        return sorted_articles[:top_k]
-    except Exception as e:
-        st.error(f"Error retrieving top articles from {collection_name}: {e}")
-        return []
 
 def update_chromadb(collection_name, data):
     """Update ChromaDB with new data."""
@@ -61,7 +44,6 @@ def fetch_and_update_news_data():
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
-        st.write("News API Response:", data)  # Print the API response
         if 'feed' in data:
             update_chromadb("news_sentiment_data", data['feed'])
             st.success("News data updated in ChromaDB.")
@@ -70,25 +52,27 @@ def fetch_and_update_news_data():
     except Exception as e:
         st.error(f"Error updating news data: {e}")
 
-def fetch_and_update_ticker_trends_data():
-    """Fetch ticker trends data from the API and update ChromaDB."""
+def retrieve_top_news_articles(collection_name, top_k=3):
+    """Retrieve top K news articles based on relevance_score_definition."""
     try:
-        response = requests.get(tickers_url)
-        response.raise_for_status()
-        data = response.json()
-        st.write("Ticker Trends API Response:", data)  # Print the API response
-        if "top_gainers" in data:
-            combined_data = [
-                {"type": "top_gainers", "data": data["top_gainers"]},
-                {"type": "top_losers", "data": data["top_losers"]},
-                {"type": "most_actively_traded", "data": data["most_actively_traded"]}
-            ]
-            update_chromadb("ticker_trends_data", combined_data)
-            st.success("Ticker trends data updated in ChromaDB.")
-        else:
-            st.error("Invalid data format received from API.")
+        collection = client.get_or_create_collection(collection_name)
+        results = collection.query(
+            query_texts=[""],  # Perform a broad query to fetch all documents
+            n_results=100  # Fetch a large number of documents for sorting
+        )
+        articles = [
+            json.loads(doc) if isinstance(doc, str) else doc
+            for doc in results['documents']
+        ]
+        sorted_articles = sorted(
+            articles,
+            key=lambda x: x.get("relevance_score_definition", 0),
+            reverse=True
+        )
+        return sorted_articles[:top_k]
     except Exception as e:
-        st.error(f"Error updating ticker trends data: {e}")
+        st.error(f"Error retrieving top articles from {collection_name}: {e}")
+        return []
 
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
@@ -100,14 +84,11 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correctly access the content attribute using dot notation
         content = response.choices[0].message.content
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
-
-### RAG-Agent Definition ###
 
 class RAGAgent:
     def __init__(self, role, goal):
@@ -118,24 +99,19 @@ class RAGAgent:
         """Execute the task using RAG and GPT-4 summarization."""
         combined_data = additional_data or []
         augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}"
+        return call_openai_gpt4(augmented_prompt)
 
-        # Call GPT-4 for summarization
-        summary = call_openai_gpt4(augmented_prompt)
-        return summary
-
-### Agents and Tasks ###
-
+### Agents Initialization ###
 researcher = RAGAgent(role="Researcher", goal="Process news data")
 market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
 risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
 writer = RAGAgent(role="Writer", goal="Generate newsletter")
 
 ### Newsletter Generation ###
-
 def generate_newsletter_with_rag():
     """Generate the newsletter using RAG and agents."""
     st.write("Executing: Extract insights from news data (Researcher)")
-    top_news = retrieve_top_news_articles("news_sentiment_data")
+    top_news = retrieve_top_news_articles("news_sentiment_data", top_k=3)
     news_results = researcher.execute_task("Extract insights from news data", additional_data=top_news)
 
     st.write("Executing: Analyze market trends (Market Analyst)")
@@ -145,7 +121,6 @@ def generate_newsletter_with_rag():
     risk_context = [{"source": "news_sentiment_data", "content": top_news}]
     risk_results = risk_analyst.execute_task("Analyze risk data", additional_data=risk_context)
 
-    # Combine insights for Writer Agent
     context = {
         "RAG_Data": {"News": top_news},
         "Agent_Insights": {
@@ -159,11 +134,10 @@ def generate_newsletter_with_rag():
     writer_task_description = "Write a cohesive newsletter based on insights from news, market trends, and risk analysis."
     newsletter = writer.execute_task(writer_task_description, additional_data=context)
 
-    # Display the generated newsletter
     st.subheader("Generated Newsletter")
     st.markdown(newsletter)
 
-    # Validate newsletter with Bespoke Labs
+    # Validate with Bespoke Labs
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
         factcheck_response = bl.minicheck.factcheck.create(
@@ -179,12 +153,8 @@ def generate_newsletter_with_rag():
         st.error(f"Error during newsletter validation: {e}")
 
 ### Main Page Buttons ###
-
 if st.button("Fetch and Store News Data"):
     fetch_and_update_news_data()
-
-if st.button("Fetch and Store Trends Data"):
-    fetch_and_update_ticker_trends_data()
 
 if st.button("Generate Newsletter"):
     generate_newsletter_with_rag()
