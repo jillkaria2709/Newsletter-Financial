@@ -8,3 +8,4 @@ crewai
 crewai[tools]
 bespokelabs
 httpx==0.27.2
+matplotlib
