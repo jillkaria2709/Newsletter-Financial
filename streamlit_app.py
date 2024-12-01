@@ -23,21 +23,25 @@ st.title("Financial Newsletter generation using Multi-Agent System")
 
 ### Helper Functions ###
 ### Helper Functions ###
+### Helper Functions ###
 def is_ticker_query(user_input):
     """Determine if the user query is a ticker symbol."""
-    return user_input.isalpha() and len(user_input) <= 5  # Assuming tickers are alphabetic and ≤5 chars
+    return user_input.isalpha() and len(user_input) <= 5  
 
 def prettify_openai_response(prompt, retrieved_data):
     """Use OpenAI to prettify RAG-based answers."""
     try:
+        # Combine context and user query for OpenAI processing
+        context = "\n".join([f"- {doc}" for doc in retrieved_data])
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
-                {"role": "system", "content": "You are a helpful assistant who formats responses professionally."},
-                {"role": "user", "content": f"Here is the context:\n{retrieved_data}\n\nQuestion: {prompt}"}
+                {"role": "system", "content": "You are a financial assistant. Use the context to answer the query."},
+                {"role": "user", "content": f"Context:\n{context}\n\nQuestion: {prompt}"}
             ]
         )
         return response.choices[0].message.content.strip()
+
     except Exception as e:
         return f"Error prettifying response: {e}"
 
@@ -47,7 +51,7 @@ def retrieve_from_rag(query, collections=["news_sentiment_data", "ticker_trends_
     for collection_name in collections:
         try:
             collection = client.get_or_create_collection(collection_name)
-            response = collection.query(query_texts=[query], n_results=3)
+            response = collection.query(query_texts=[query], n_results=5)
             results.extend(response.get("documents", []))
         except Exception as e:
             st.error(f"Error retrieving data from {collection_name}: {e}")
@@ -361,14 +365,13 @@ if st.button("Send"):
             bot_response = format_ticker_response(ticker_result)
 
         # Case 2: User asked a RAG-related question
-        elif any(keyword in user_input.lower() for keyword in ["news", "trends", "market"]):
+        elif any(keyword in user_input.lower() for keyword in ["news", "trends", "market", "insights"]):
             st.write("Searching in stored RAG data...")
             rag_results = retrieve_from_rag(user_input)
 
             if rag_results:
                 # Prettify the RAG results using OpenAI
-                retrieved_data = "\n".join(rag_results)
-                bot_response = prettify_openai_response(user_input, retrieved_data)
+                bot_response = prettify_openai_response(user_input, rag_results)
             else:
                 bot_response = "No relevant information found in RAG."
 
@@ -378,7 +381,7 @@ if st.button("Send"):
             bot_response = handle_fallback_with_openai(user_input)
 
         # Display response
-        st.text(bot_response)
+        st.markdown(bot_response)  # Use Markdown for better formatting
 
         # Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
