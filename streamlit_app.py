@@ -8,6 +8,7 @@ sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs
 from bs4 import BeautifulSoup
+import matplotlib.pyplot as plt
 
 # Initialize Bespoke Labs with the API key
 bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
@@ -39,9 +40,28 @@ def scrape_context_from_url(url):
         st.error(f"Error scraping context from URL: {e}")
         return None
 
-def factcheck_with_bespoke(claim, url):
-    """Perform fact-checking using Bespoke Labs with scraped context from a URL."""
-    context = scrape_context_from_url(url)
+def factcheck_with_bespoke_from_newsletter(newsletter):
+    """Perform fact-checking using Bespoke Labs with dynamically retrieved context."""
+    if not newsletter:
+        st.error("No newsletter content available for fact-checking.")
+        return None
+
+    # Use the newsletter content as the claim
+    claim = newsletter
+
+    # Dynamically retrieve context from multiple sources
+    context_sources = [
+        "https://www.alphavantage.co",  # Example financial API site
+        "https://www.bespokepremium.com",  # Bespoke Premium site
+        "https://www.marketwatch.com",  # MarketWatch for financial news
+    ]
+
+    context = ""
+    for url in context_sources:
+        scraped_context = scrape_context_from_url(url)
+        if scraped_context:
+            context += f"\n\nContext from {url}:\n{scraped_context}"
+
     if context:
         try:
             response = bl.minicheck.factcheck.create(claim=claim, context=context)
@@ -53,21 +73,8 @@ def factcheck_with_bespoke(claim, url):
             st.error(f"Error with Bespoke Labs Fact-Check: {e}")
             return None
     else:
-        st.error("No context available for fact-checking.")
+        st.error("Failed to retrieve context for fact-checking.")
         return None
-
-def retrieve_from_chromadb(collection_name, query, top_k=3):
-    """Retrieve relevant documents from ChromaDB."""
-    collection = client.get_or_create_collection(collection_name)
-    try:
-        results = collection.query(
-            query_texts=[query],
-            n_results=top_k
-        )
-        return results['documents']
-    except Exception as e:
-        st.error(f"Error retrieving data from ChromaDB: {e}")
-        return []
 
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
@@ -91,12 +98,8 @@ class RAGAgent:
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        if "news" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
-        elif "trends" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("ticker_trends_data", task_description)
-        else:
-            retrieved_data = []
+        # Placeholder for data retrieval (e.g., ChromaDB)
+        retrieved_data = []
 
         combined_data = retrieved_data
         if additional_data:
@@ -137,6 +140,7 @@ def generate_sequential_newsletter(news_insights, market_insights, risk_insights
         if "Error" in newsletter:
             st.error("Failed to generate the newsletter.")
         else:
+            st.session_state["newsletter_content"] = newsletter  # Store newsletter for fact-checking
             st.subheader("Generated Newsletter")
             st.markdown(f"## Writer's Newsletter\n{newsletter}")
     else:
@@ -160,12 +164,18 @@ if st.button("Generate Newsletter"):
 
 ### Fact-Checking Integration ###
 st.subheader("Fact-Check with Bespoke Labs")
-claim = st.text_input("Enter a claim to fact-check:")
-url = st.text_input("Enter a URL for context:")
 
-if st.button("Fact-Check Claim"):
-    factcheck_result = factcheck_with_bespoke(claim, url)
-    if factcheck_result:
-        st.write("**Fact-Check Result**")
-        st.write(f"Support Probability: {factcheck_result['support_prob']}")
-        st.write(f"Details: {factcheck_result['details']}")
+if st.button("Fact-Check Newsletter"):
+    try:
+        # Use the last generated newsletter as the claim
+        newsletter_content = st.session_state.get("newsletter_content", None)
+        if not newsletter_content:
+            st.error("No newsletter content found. Please generate a newsletter first.")
+        else:
+            factcheck_result = factcheck_with_bespoke_from_newsletter(newsletter_content)
+            if factcheck_result:
+                st.write("**Fact-Check Result**")
+                st.write(f"Support Probability: {factcheck_result['support_prob']}")
+                st.write(f"Details: {factcheck_result['details']}")
+    except Exception as e:
+        st.error(f"Error during fact-checking: {e}")
