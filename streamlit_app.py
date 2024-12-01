@@ -239,22 +239,23 @@ if st.button("Fact-Check Newsletter"):
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
 
-### Chatbot ###
 st.subheader("Chatbot")
+
 if "conversation_history" not in st.session_state:
     st.session_state["conversation_history"] = []
 
 user_input = st.text_input("Ask me something:")
 
-
 if st.button("Send"):
-    if user_input.strip():
-        response = None
-
-        # Step 1: Check if it's a ticker query
-        if user_input.isalpha() and len(user_input) <= 5:
+    if not user_input.strip():
+        st.write("Please enter a query.")
+    else:
+        # Step 1: Check for ticker symbol
+        if user_input.isalpha() and len(user_input) <= 5:  # Assuming ticker symbols are alphanumeric and <= 5 chars
             ticker_data = fetch_ticker_price(user_input.upper())
-            if "error" not in ticker_data:
+            if "error" in ticker_data:
+                response = f"Error: {ticker_data['error']}"
+            else:
                 response = (
                     f"**Ticker:** {ticker_data['ticker']}\n"
                     f"**Date:** {ticker_data['date']}\n"
@@ -264,25 +265,17 @@ if st.button("Send"):
                     f"**Close:** {ticker_data['close']}\n"
                     f"**Volume:** {ticker_data['volume']}\n"
                 )
-            else:
-                response = ticker_data["error"]
-
-        # Step 2: Check RAG data from ChromaDB
-        if not response:
-            rag_results = (
-                retrieve_from_chromadb("news_sentiment_data", user_input) +
-                retrieve_from_chromadb("market_data", user_input)
-            )
+        else:
+            # Step 2: Try RAG for factual data
+            rag_results = retrieve_from_multiple_rags(user_input, ["news_sentiment_data", "ticker_trends_data"])
             if rag_results:
-                response = " ".join(rag_results)
+                response = " ".join([str(doc) for doc in rag_results])  # Ensure all items are strings
+            else:
+                # Step 3: Fallback to OpenAI GPT-4 for generic queries
+                prompt = f"User: {user_input}\nContext: No relevant RAG data found."
+                response = call_openai_gpt4(prompt)
 
-        # Step 3: Fallback to OpenAI GPT-4
-        if not response:
-            response = call_openai_gpt4(f"User Query: {user_input}")
-
-        # Display response and store in session state
-        st.write(f"**Chatbot Response:** {response}")
+        # Display the chatbot response
+        st.write(response)
+        # Update conversation history
         st.session_state["conversation_history"].append({"user": user_input, "bot": response})
-    else:
-        st.write("Please enter a query.")
-        
