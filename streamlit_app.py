@@ -363,8 +363,7 @@ if st.button("Send"):
             st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
             ticker_result = fetch_ticker_price(user_input.upper())
             bot_response = format_ticker_response(ticker_result)
-            st.text(bot_response)  # Use st.text for plain text output
-            
+
         # Case 2: User asked a RAG-related question
         elif any(keyword in user_input.lower() for keyword in ["news", "trends", "market", "insights"]):
             st.write("Searching in stored RAG data...")
@@ -381,8 +380,11 @@ if st.button("Send"):
             st.write("Falling back to OpenAI for a response...")
             bot_response = handle_fallback_with_openai(user_input)
 
-        # Display response
-        st.markdown(bot_response)  # Use Markdown for better formatting
+        # Display response using a single function
+        if is_ticker_query(user_input):
+            st.text(bot_response)  # Use st.text for plain text ticker response
+        else:
+            st.markdown(bot_response)  # Use st.markdown for RAG or fallback responses
 
         # Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
