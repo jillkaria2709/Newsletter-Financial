@@ -60,15 +60,18 @@ def retrieve_top_news_articles(collection_name, top_k=3):
         
         # Fetch all documents with a broad query
         results = collection.query(
-            query_texts=[""],  # Perform a broad query to fetch all documents
-            n_results=100  # Fetch a large number of documents for sorting
+            query_texts=[""],  # Broad query to fetch documents
+            n_results=100  # Fetch a large number of results for ranking
         )
         
-        # Ensure results['documents'] is treated as a list of JSON strings or objects
-        articles = [
-            json.loads(doc) if isinstance(doc, str) else doc
-            for doc in results.get('documents', [])
-        ]
+        # Assume results directly return a list of documents
+        if isinstance(results, list):
+            articles = [
+                json.loads(doc) if isinstance(doc, str) else doc
+                for doc in results
+            ]
+        else:
+            articles = results.get('documents', [])
         
         # Sort by relevance_score_definition
         sorted_articles = sorted(
