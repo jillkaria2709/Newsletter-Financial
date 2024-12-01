@@ -33,6 +33,28 @@ def retrieve_from_multiple_rags(query, collections, top_k=3):
             st.error(f"Error retrieving data from collection {collection_name}: {e}")
     return results
 
+### Define Tool Schema ###
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": "fetch_ticker_price",
+            "description": "Fetch the latest price for a given stock ticker symbol.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "ticker": {
+                        "type": "string",
+                        "description": "The stock ticker symbol (e.g., AAPL, MSFT)."
+                    }
+                },
+                "required": ["ticker"]
+            }
+        }
+    }
+]
+
+### Define Function ###
 def fetch_ticker_price(ticker):
     """Fetch the latest price for a given ticker symbol."""
     url = f"https://www.alphavantage.co/query?function=TIME_SERIES_DAILY&symbol={ticker}&apikey={alpha_vantage_key}"
@@ -56,6 +78,17 @@ def fetch_ticker_price(ticker):
             return {"error": "Ticker symbol not found or invalid data received."}
     except Exception as e:
         return {"error": f"Error fetching ticker data: {e}"}
+
+### Tool Handler ###
+def handle_tool_call(tool_name, parameters):
+    """Handle tool calls dynamically based on the tool schema."""
+    if tool_name == "fetch_ticker_price":
+        ticker = parameters.get("ticker")
+        if not ticker:
+            return {"error": "Ticker symbol is required for this function."}
+        return fetch_ticker_price(ticker)
+    else:
+        return {"error": f"Tool '{tool_name}' is not implemented."}
 
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
@@ -227,7 +260,6 @@ def factcheck_with_bespoke_from_newsletter():
         return None
 
 ### Buttons for Updating Data ###
-st.subheader("Update Data")
 if st.button("Update News Data"):
     fetch_and_update_news_data()
 
@@ -250,7 +282,7 @@ if st.button("Fact-Check Newsletter"):
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
 
-### Chatbot UI with Short-Term Memory ###
+### Modify Chatbot ###
 st.subheader("Chatbot")
 
 # Initialize session state for conversation history
@@ -265,63 +297,44 @@ if st.button("Send"):
     else:
         user_input = user_input.strip()
 
-        # Step 1: Check if it's a ticker query
-        if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
-            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
-            ticker_result = fetch_ticker_price(user_input.upper())
-            if "error" in ticker_result:
-                bot_response = f"Error: {ticker_result['error']}"
-                st.error(bot_response)
-            else:
-                bot_response = (
-                    f"**Ticker:** {ticker_result['ticker']}\n"
-                    f"**Date:** {ticker_result['date']}\n"
-                    f"**Open:** {ticker_result['open']}\n"
-                    f"**High:** {ticker_result['high']}\n"
-                    f"**Low:** {ticker_result['low']}\n"
-                    f"**Close:** {ticker_result['close']}\n"
-                    f"**Volume:** {ticker_result['volume']}\n"
-                )
-                st.write(bot_response)
-        else:
-            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
-            st.write("Searching in stored RAG data...")
-            rag_collections = ["news_sentiment_data", "ticker_trends_data"]
-            rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
+        # Construct a prompt for GPT-4
+        memory_context = "\n".join(
+            [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+        )
+        prompt = (
+            f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
+            f"Use the appropriate tool if needed. Respond concisely.\n\n"
+            f"Conversation History:\n{memory_context}\n\n"
+            f"Query: {user_input}\n\n"
+            f"Available Tools:\n{json.dumps(tools, indent=2)}"
+        )
 
-            if rag_results:
-                # Combine RAG results into a context for GPT-4
-                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
-                context = "\n".join(
-                    [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
-                )
-                # Include recent conversation history in the prompt
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
-                )
-                prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-                    f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
-                    f"Query: {user_input}\n\n"
-                    f"Context from RAG:\n{context}"
-                )
-                bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
-            else:
-                # Fallback to OpenAI GPT-4
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
-                )
-                prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-                    f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
-                    f"Query: {user_input}"
-                )
-                bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
+        # Call GPT-4 with tools
+        try:
+            response = openai.ChatCompletion.create(
+                model="gpt-4",
+                messages=[
+                    {"role": "system", "content": "You are a helpful assistant."},
+                    {"role": "user", "content": prompt}
+                ],
+                functions=tools,
+                function_call="auto"
+            )
 
-        # Step 3: Update Conversation History
+            # Check if GPT made a function call
+            if response.get("function_call"):
+                tool_name = response["function_call"]["name"]
+                parameters = json.loads(response["function_call"]["parameters"])
+                tool_result = handle_tool_call(tool_name, parameters)
+                bot_response = json.dumps(tool_result, indent=2)
+            else:
+                bot_response = response.choices[0].message.content.strip()
+
+            st.write(bot_response)
+
+        except Exception as e:
+            st.error(f"Error calling GPT-4 with tools: {e}")
+            bot_response = "I'm sorry, there was an issue processing your request."
+
+        # Update Conversation History
         st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
-
