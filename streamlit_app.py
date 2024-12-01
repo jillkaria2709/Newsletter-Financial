@@ -317,15 +317,18 @@ if st.button("Send"):
                 function_call="auto"
             )
 
-            # Correctly access GPT-4 function call response
-            if "function_call" in response.choices[0].message:
-                function_call = response.choices[0].message["function_call"]
-                tool_name = function_call["name"]
-                parameters = json.loads(function_call["parameters"])
+            # Access function call response correctly
+            message = response.choices[0].message  # Get the message object
+
+            if hasattr(message, "function_call") and message.function_call:
+                # If a function call is made, extract its details
+                tool_name = message.function_call.name
+                parameters = json.loads(message.function_call.parameters)
                 tool_result = handle_tool_call(tool_name, parameters)
                 bot_response = json.dumps(tool_result, indent=2)
             else:
-                bot_response = response.choices[0].message["content"]
+                # Fallback to direct content response
+                bot_response = message.content.strip()
 
             st.write(bot_response)
 
