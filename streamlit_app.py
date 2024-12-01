@@ -25,8 +25,8 @@ st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, and Chatbot")
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        response = openai.ChatCompletion.create(
-            model="gpt-4",
+        response = openai.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
                 {"role": "system", "content": "You are a financial assistant."},
                 {"role": "user", "content": prompt}
