@@ -29,10 +29,16 @@ st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 def factcheck_with_bespoke(claim, context):
     try:
         response = bl.minicheck.factcheck.create(claim=claim, context=context)
-        return response
+        # Access attributes of the response object
+        return {
+            "support_prob": getattr(response, "support_prob", "N/A"),
+            "details": str(response)  # Use str() to capture the full response as fallback
+        }
+    except AttributeError as e:
+        st.error(f"Attribute error: {e}")
     except Exception as e:
         st.error(f"Error with Bespoke Labs Fact-Check: {e}")
-        return None
+    return None
 
 def retrieve_from_multiple_rags(query, collections, top_k=3):
     """Search multiple collections for relevant RAG data."""
@@ -216,7 +222,7 @@ def generate_newsletter_with_rag():
         bespoke_factcheck_summary = (
             f"Bespoke Fact-Check Claim: {claim}\n"
             f"Context: RAG + Agents' Insights\n"
-            f"Support Probability: {factcheck_response.get('support_prob', 'N/A')}\n"
+            f"Support Probability: {factcheck_response['support_prob']}\n"
         )
     else:
         bespoke_factcheck_summary = "No fact-check results available."
