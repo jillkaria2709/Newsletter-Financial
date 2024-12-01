@@ -104,8 +104,8 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Access the content correctly
-        content = response['choices'][0]['message']['content']
+        # Correctly access the content from the response
+        content = response.choices[0].message.content
         return content.strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
