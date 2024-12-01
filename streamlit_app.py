@@ -7,6 +7,7 @@ import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs
+import matplotlib.pyplot as plt
 
 # Initialize Bespoke Labs with the API key
 bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])
@@ -23,29 +24,27 @@ news_url = f'https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={a
 tickers_url = f'https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}'
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
+st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, and Chatbot")
 
 ### Helper Functions ###
 def factcheck_with_bespoke(claim, context):
+    """Perform fact-checking using Bespoke Labs."""
     try:
         response = bl.minicheck.factcheck.create(claim=claim, context=context)
-        # Access attributes of the response object
         return {
             "support_prob": getattr(response, "support_prob", "N/A"),
-            "details": str(response)  # Use str() to capture the full response as fallback
+            "details": str(response)
         }
-    except AttributeError as e:
-        st.error(f"Attribute error: {e}")
     except Exception as e:
         st.error(f"Error with Bespoke Labs Fact-Check: {e}")
-    return None
+        return None
 
 def retrieve_from_multiple_rags(query, collections, top_k=3):
     """Search multiple collections for relevant RAG data."""
     results = []
     for collection_name in collections:
         collection_results = retrieve_from_chromadb(collection_name, query, top_k)
-        results.extend([doc for doc in collection_results if doc])  # Filter empty results
+        results.extend([doc for doc in collection_results if doc])
     return results
 
 def update_chromadb(collection_name, data):
@@ -64,7 +63,7 @@ def fetch_and_update_news_data():
         response = requests.get(news_url)
         response.raise_for_status()
         data = response.json()
-        st.write("News API Response:", data)  # Print the API response
+        st.write("News API Response:", data)
         if 'feed' in data:
             update_chromadb("news_sentiment_data", data['feed'])
             st.success("News data updated in ChromaDB.")
@@ -79,7 +78,7 @@ def fetch_and_update_ticker_trends_data():
         response = requests.get(tickers_url)
         response.raise_for_status()
         data = response.json()
-        st.write("Ticker Trends API Response:", data)  # Print the API response
+        st.write("Ticker Trends API Response:", data)
         if "top_gainers" in data:
             combined_data = [
                 {"type": "top_gainers", "data": data["top_gainers"]},
@@ -116,7 +115,6 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Correctly access the content attribute using dot notation
         content = response.choices[0].message.content
         return content.strip()
     except Exception as e:
@@ -148,16 +146,25 @@ def fetch_ticker_price(ticker):
     except Exception as e:
         return {"error": f"Error fetching ticker price: {e}"}
 
-### RAG-Agent Definition ###
+### Visualization ###
+def plot_top_gainers(gainers):
+    """Visualize top gainers using a bar chart."""
+    tickers = [g['symbol'] for g in gainers]
+    gains = [float(g['percent_change']) for g in gainers]
 
+    plt.bar(tickers, gains)
+    plt.title("Top Gainers")
+    plt.xlabel("Stocks")
+    plt.ylabel("Percentage Gain")
+    st.pyplot(plt)
+
+### RAG-Agent Definition ###
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
         self.goal = goal
 
     def execute_task(self, task_description, additional_data=None):
-        """Execute the task using RAG and GPT-4 summarization."""
-        # Retrieve relevant data from ChromaDB
         if "news" in self.goal.lower():
             retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
         elif "trends" in self.goal.lower():
@@ -165,39 +172,24 @@ class RAGAgent:
         else:
             retrieved_data = []
 
-        # Combine additional data if provided
         combined_data = retrieved_data
         if additional_data:
             combined_data.extend(additional_data)
 
-        # Combine retrieved data with task description
         augmented_prompt = f"Role: {self.role}\nGoal: {self.goal}\nTask: {task_description}\nRelevant Data:\n{json.dumps(combined_data)}"
-
-        # Call GPT-4 for summarization
         summary = call_openai_gpt4(augmented_prompt)
         return summary
 
 ### Agents and Tasks ###
-
 researcher = RAGAgent(role="Researcher", goal="Process news data")
 market_analyst = RAGAgent(role="Market Analyst", goal="Analyze trends")
 risk_analyst = RAGAgent(role="Risk Analyst", goal="Identify risks")
 writer = RAGAgent(role="Writer", goal="Generate newsletter")
 
-tasks = [
-    {"description": "Extract insights from news data", "agent": researcher},
-    {"description": "Analyze market trends", "agent": market_analyst},
-    {"description": "Analyze risk data", "agent": risk_analyst},
-    {"description": "Write the newsletter", "agent": writer},
-]
-
 ### Newsletter Generation ###
-
 def generate_newsletter_with_rag():
-    """Generate the newsletter using RAG, agents, and Bespoke Labs fact-check."""
     newsletter_content = []
 
-    # Step 1: Execute tasks for Risk Analyst, Market Analyst, and Researcher
     st.write("Executing: Extract insights from news data (Researcher)")
     news_results = researcher.execute_task("Extract insights from news data")
 
@@ -207,53 +199,59 @@ def generate_newsletter_with_rag():
     st.write("Executing: Analyze risk data (Risk Analyst)")
     risk_results = risk_analyst.execute_task("Analyze risk data")
 
-    # Step 2: Combine data for context
-    combined_context = (
-        f"News Insights:\n{news_results}\n\n"
-        f"Market Trends:\n{trends_results}\n\n"
-        f"Risk Analysis:\n{risk_results}\n"
-    )
+    combined_context = f"News Insights:\n{news_results}\n\nMarket Trends:\n{trends_results}\n\nRisk Analysis:\n{risk_results}\n"
 
-    # Step 3: Perform Fact-Check with Bespoke Labs
     claim = "newsletter"
     factcheck_response = factcheck_with_bespoke(claim=claim, context=combined_context)
-    bespoke_factcheck_summary = ""
-    if factcheck_response:
-        bespoke_factcheck_summary = (
-            f"Bespoke Fact-Check Claim: {claim}\n"
-            f"Context: RAG + Agents' Insights\n"
-            f"Support Probability: {factcheck_response['support_prob']}\n"
-        )
-    else:
-        bespoke_factcheck_summary = "No fact-check results available."
-
-    # Step 4: Generate the newsletter with Writer Agent
-    st.write("Executing: Write the newsletter (Writer)")
-    writer_task_description = (
-        "Write a cohesive newsletter based on insights from news, market trends, and risk analysis. "
-        "Incorporate fact-check results and generate content accordingly."
+    bespoke_factcheck_summary = (
+        f"Support Probability: {factcheck_response['support_prob']}" if factcheck_response else "No fact-check results available."
     )
+
+    writer_task_description = "Write a cohesive newsletter based on the extracted insights."
     newsletter = writer.execute_task(writer_task_description, additional_data=[combined_context, bespoke_factcheck_summary])
 
-    # Step 5: Display the final newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
     else:
-        # Add fact-check results and agent responses to the newsletter
-        newsletter_content.append("## Newsletter\n")
-        newsletter_content.append("### Bespoke Labs Fact-Check Results\n")
-        newsletter_content.append(bespoke_factcheck_summary)
-        newsletter_content.append("\n\n### Agent Responses\n")
-        newsletter_content.append(f"**Researcher:** {news_results}\n")
-        newsletter_content.append(f"**Market Analyst:** {trends_results}\n")
-        newsletter_content.append(f"**Risk Analyst:** {risk_results}\n")
-        newsletter_content.append("\n### Generated Newsletter\n")
-        newsletter_content.append(newsletter)
+        st.markdown(f"## Newsletter\n### Bespoke Labs Insights\n{bespoke_factcheck_summary}\n### Agent Responses\n{newsletter}")
 
-    st.subheader("Generated Newsletter")
-    st.markdown("\n".join(newsletter_content))
+### Chatbot ###
+st.subheader("Chatbot")
 
-### Main Page Buttons ###
+if "conversation_history" not in st.session_state:
+    st.session_state["conversation_history"] = []
+
+user_input = st.text_input("Ask me something:")
+
+if st.button("Send"):
+    if not user_input.strip():
+        st.write("Please enter a query.")
+    else:
+        if user_input.isalpha() and len(user_input) <= 5:  # Check for ticker symbol
+            ticker_data = fetch_ticker_price(user_input.upper())
+            if "error" in ticker_data:
+                response = f"Error: {ticker_data['error']}"
+            else:
+                response = (
+                    f"**Ticker:** {ticker_data['ticker']}\n"
+                    f"**Date:** {ticker_data['date']}\n"
+                    f"**Open:** {ticker_data['open']}\n"
+                    f"**High:** {ticker_data['high']}\n"
+                    f"**Low:** {ticker_data['low']}\n"
+                    f"**Close:** {ticker_data['close']}\n"
+                    f"**Volume:** {ticker_data['volume']}\n"
+                )
+            st.write(response)
+        else:
+            rag_results = retrieve_from_multiple_rags(user_input, ["news_sentiment_data", "ticker_trends_data"])
+            context = "\n".join(rag_results) if rag_results else "No relevant data found."
+            prompt = f"User: {user_input}\nContext: {context}"
+            response = call_openai_gpt4(prompt)
+            st.write(response)
+
+        st.session_state["conversation_history"].append({"user": user_input, "bot": response})
+
+### Main Buttons ###
 if st.button("Fetch and Store News Data"):
     fetch_and_update_news_data()
 
@@ -262,77 +260,3 @@ if st.button("Fetch and Store Trends Data"):
 
 if st.button("Generate Newsletter"):
     generate_newsletter_with_rag()
-### Chatbot UI with Short-Term Memory ###
-st.subheader("Chatbot")
-
-# Initialize session state for conversation history
-if "conversation_history" not in st.session_state:
-    st.session_state["conversation_history"] = []
-
-user_input = st.text_input("Ask me something:")
-
-if st.button("Send"):
-    if len(user_input.strip()) == 0:
-        st.write("Please enter a query.")
-    else:
-        user_input = user_input.strip()
-
-        # Step 1: Check if it's a ticker query
-        if user_input.isalpha() and len(user_input) <= 3:  # Assuming stock tickers are alphabetic and <= 5 characters
-            st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
-            ticker_result = fetch_ticker_price(user_input.upper())
-            if "error" in ticker_result:
-                bot_response = f"Error: {ticker_result['error']}"
-                st.error(bot_response)
-            else:
-                bot_response = (
-                    f"**Ticker:** {ticker_result['ticker']}\n"
-                    f"**Date:** {ticker_result['date']}\n"
-                    f"**Open:** {ticker_result['open']}\n"
-                    f"**High:** {ticker_result['high']}\n"
-                    f"**Low:** {ticker_result['low']}\n"
-                    f"**Close:** {ticker_result['close']}\n"
-                    f"**Volume:** {ticker_result['volume']}\n"
-                )
-                st.write(bot_response)
-        else:
-            # Step 2: Query RAG and Use OpenAI GPT-4 for Contextual Understanding
-            st.write("Searching in stored RAG data...")
-            rag_collections = ["news_sentiment_data", "ticker_trends_data"]
-            rag_results = retrieve_from_multiple_rags(user_input, rag_collections)
-
-            if rag_results:
-                # Combine RAG results into a context for GPT-4
-                st.write("Found relevant data in stored RAG. Passing to GPT-4 for contextual understanding...")
-                context = "\n".join(
-                    [json.dumps(result, indent=2) if isinstance(result, dict) else str(result) for result in rag_results]
-                )
-                # Include recent conversation history in the prompt
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-3:]]
-                )
-                prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-                    f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
-                    f"Query: {user_input}\n\n"
-                    f"Context from RAG:\n{context}"
-                )
-                bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
-            else:
-                # Fallback to OpenAI GPT-4
-                memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-3:]]
-                )
-                prompt = (
-                    f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
-                    f"Provide a relevant and well-framed response.\n\n"
-                    f"Conversation History:\n{memory_context}\n\n"
-                    f"Query: {user_input}"
-                )
-                bot_response = call_openai_gpt4(prompt)
-                st.write(bot_response)
-
-        # Step 3: Update Conversation History
-        st.session_state["conversation_history"].append({"user": user_input, "bot": bot_response})
