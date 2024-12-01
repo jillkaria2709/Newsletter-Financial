@@ -6,7 +6,7 @@ __import__('pysqlite3')
 import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
-from bespokelabs import BespokeLabs 
+from bespokelabs import BespokeLabs
 
 # Initialize Bespoke Labs
 bl = BespokeLabs(
@@ -32,24 +32,21 @@ st.title("Alpha Vantage Multi-Agent System with RAG and OpenAI GPT-4")
 def retrieve_top_news(collection_name, query, top_k=3):
     """Retrieve top K most relevant news articles based on relevance_score_definition."""
     try:
-        # Retrieve documents from ChromaDB
         collection = client.get_or_create_collection(collection_name)
         results = collection.query(
             query_texts=[query],
             n_results=10
         )
-
-        # Ensure results['documents'] is processed correctly
-        documents = results['documents']
-
-        # Parse and rank the documents
-        parsed_docs = [json.loads(doc) if isinstance(doc, str) else doc for doc in documents]
+        # Process and rank results based on relevance_score_definition
+        parsed_docs = [
+            json.loads(doc) if isinstance(doc, str) else doc
+            for doc in results.get('documents', [])
+        ]
         ranked_articles = sorted(
             parsed_docs,
             key=lambda x: x.get("relevance_score_definition", 0),
             reverse=True
         )[:top_k]
-
         return ranked_articles
     except Exception as e:
         st.error(f"Error retrieving data from {collection_name}: {e}")
@@ -103,7 +100,6 @@ def fetch_and_update_ticker_trends_data():
 def call_openai_gpt4(prompt):
     """Call OpenAI GPT-4 to process the prompt."""
     try:
-        # Make the API call
         response = openai.chat.completions.create(
             model="gpt-4o-mini",
             messages=[
@@ -111,8 +107,7 @@ def call_openai_gpt4(prompt):
                 {"role": "user", "content": prompt}
             ]
         )
-        # Access the content properly
-        return response.choices[0].message['content']
+        return response.choices[0].message['content'].strip()
     except Exception as e:
         st.error(f"Error calling OpenAI GPT-4: {e}")
         return "I'm sorry, I couldn't process your request at this time."
@@ -134,8 +129,7 @@ class RAGAgent:
             f"Use ONLY the following RAG data to frame your response:\n{formatted_data}"
         )
 
-        response = call_openai_gpt4(prompt)
-        return response
+        return call_openai_gpt4(prompt)
 
 ### Newsletter Generation ###
 
