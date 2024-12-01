@@ -180,24 +180,50 @@ def generate_newsletter_with_rag():
     """Generate the newsletter using RAG and agents and validate it with Bespoke Labs."""
     newsletter_content = []
 
-    # Step 1: Execute Tasks for Each Agent
+    # Step 1: Execute Researcher Task
     st.write("Executing: Extract insights from news data (Researcher)")
     news_results = researcher.execute_task("Extract insights from news data")
 
+    # Step 2: Execute Market Analyst Task
     st.write("Executing: Analyze market trends (Market Analyst)")
     trends_results = market_analyst.execute_task("Analyze market trends")
 
+    # Step 3: Execute Risk Analyst Task
     st.write("Executing: Analyze risk data (Risk Analyst)")
-    risk_results = risk_analyst.execute_task("Analyze risk data")
+    
+    # Combine RAG data and agent outputs for Risk Analyst
+    risk_analyst_input = [
+        {"source": "news_sentiment_data", "content": news_results},
+        {"source": "ticker_trends_data", "content": trends_results},
+        {"role": "Researcher", "content": news_results},
+        {"role": "Market Analyst", "content": trends_results}
+    ]
 
-    # Step 2: Combine Agent Outputs as Context
+    # Debugging: Display data being passed to Risk Analyst
+    st.write("Input to Risk Analyst:", risk_analyst_input)
+
+    risk_analyst_task_description = (
+        "Analyze risks based on the provided RAG data (news_sentiment_data and ticker_trends_data) "
+        "and insights from the Researcher and Market Analyst. Focus on identifying potential risks "
+        "and mitigation strategies relevant to the data."
+    )
+
+    risk_results = risk_analyst.execute_task(
+        risk_analyst_task_description,
+        additional_data=risk_analyst_input
+    )
+
+    # Debugging: Display Risk Analyst Output
+    st.write("Risk Analyst Output:", risk_results)
+
+    # Step 4: Combine Agent Outputs as Context
     combined_data = [
         {"role": "Researcher", "content": news_results},
         {"role": "Market Analyst", "content": trends_results},
         {"role": "Risk Analyst", "content": risk_results}
     ]
 
-    # Step 3: Write the Newsletter (Writer Agent)
+    # Step 5: Write the Newsletter (Writer Agent)
     st.write("Executing: Write the newsletter (Writer)")
     writer_task_description = (
         "Write a cohesive newsletter using ONLY the provided insights from RAG data. "
@@ -205,7 +231,7 @@ def generate_newsletter_with_rag():
     )
     newsletter = writer.execute_task(writer_task_description, additional_data=combined_data)
 
-    # Step 4: Display the Generated Newsletter
+    # Step 6: Display the Generated Newsletter
     if "Error" in newsletter:
         st.error("Failed to generate the newsletter.")
     else:
@@ -213,7 +239,7 @@ def generate_newsletter_with_rag():
         st.subheader("Generated Newsletter")
         st.markdown("\n".join(newsletter_content))
 
-    # Step 5: Validate the Newsletter with Bespoke Labs
+    # Step 7: Validate the Newsletter with Bespoke Labs
     try:
         st.write("Validating the newsletter with Bespoke Labs...")
         
@@ -228,7 +254,7 @@ def generate_newsletter_with_rag():
             context=json.dumps(context)  # Use combined agent outputs as the context
         )
 
-        # Step 6: Display the Factcheck Response
+        # Step 8: Display the Factcheck Response
         st.write("Factcheck Response (Raw):", factcheck_response)
         support_prob = getattr(factcheck_response, "support_prob", None)
 
