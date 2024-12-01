@@ -19,7 +19,7 @@ alpha_vantage_key = st.secrets["alpha_vantage"]["api_key"]
 openai.api_key = st.secrets["openai"]["api_key"]
 
 # Streamlit App Title
-st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, and Chatbot")
+st.title("Alpha Vantage Multi-Agent System with RAG, Bespoke Labs, Chatbot, and More")
 
 ### Helper Functions ###
 def call_openai_gpt4(prompt):
@@ -51,6 +51,54 @@ def retrieve_from_chromadb(collection_name, query, top_k=3):
         st.error(f"Error retrieving data from ChromaDB: {e}")
         return []
 
+def update_chromadb(collection_name, data):
+    """Update ChromaDB with new data."""
+    collection = client.get_or_create_collection(collection_name)
+    try:
+        for i, item in enumerate(data, start=1):
+            collection.add(
+                ids=[f"{collection_name}_{i}"],
+                metadatas=[{"source": item.get("source", "N/A"), "time_published": item.get("time_published", "N/A")}],
+                documents=[json.dumps(item)]
+            )
+        st.success(f"Updated {collection_name} with new data.")
+    except Exception as e:
+        st.error(f"Error updating {collection_name}: {e}")
+
+def fetch_and_update_news_data():
+    """Fetch news data from Alpha Vantage and update ChromaDB."""
+    news_url = f"https://www.alphavantage.co/query?function=NEWS_SENTIMENT&apikey={alpha_vantage_key}&limit=50"
+    try:
+        response = requests.get(news_url)
+        response.raise_for_status()
+        data = response.json()
+        if "feed" in data:
+            update_chromadb("news_sentiment_data", data["feed"])
+        else:
+            st.error("Invalid news data format.")
+    except Exception as e:
+        st.error(f"Error fetching news data: {e}")
+
+def fetch_and_update_market_data():
+    """Fetch market data from Alpha Vantage and update ChromaDB."""
+    market_url = f"https://www.alphavantage.co/query?function=TOP_GAINERS_LOSERS&apikey={alpha_vantage_key}"
+    try:
+        response = requests.get(market_url)
+        response.raise_for_status()
+        data = response.json()
+        if "top_gainers" in data:
+            combined_data = [
+                {"type": "top_gainers", "data": data["top_gainers"]},
+                {"type": "top_losers", "data": data["top_losers"]},
+                {"type": "most_actively_traded", "data": data["most_actively_traded"]}
+            ]
+            update_chromadb("market_data", combined_data)
+        else:
+            st.error("Invalid market data format.")
+    except Exception as e:
+        st.error(f"Error fetching market data: {e}")
+
+### RAGAgent ###
 class RAGAgent:
     def __init__(self, role, goal):
         self.role = role
@@ -61,9 +109,7 @@ class RAGAgent:
         if "news" in self.goal.lower():
             retrieved_data = retrieve_from_chromadb("news_sentiment_data", task_description)
         elif "trends" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("ticker_trends_data", task_description)
-        elif "risks" in self.goal.lower():
-            retrieved_data = retrieve_from_chromadb("risk_analysis_data", task_description)
+            retrieved_data = retrieve_from_chromadb("market_data", task_description)
         else:
             retrieved_data = []
 
@@ -145,7 +191,30 @@ def factcheck_with_bespoke_from_newsletter():
         st.error(f"Error with Bespoke Labs Fact-Check: {e}")
         return None
 
-### Main Buttons ###
+### Chatbot ###
+st.subheader("Chatbot")
+if "conversation_history" not in st.session_state:
+    st.session_state["conversation_history"] = []
+
+user_input = st.text_input("Ask me something:")
+
+if st.button("Send"):
+    if user_input.strip():
+        results = retrieve_from_chromadb("news_sentiment_data", user_input) + retrieve_from_chromadb("market_data", user_input)
+        context = "\n".join(results) if results else "No relevant data found."
+        response = call_openai_gpt4(f"User Query: {user_input}\nContext: {context}")
+        st.write(f"**Chatbot Response:** {response}")
+        st.session_state["conversation_history"].append({"user": user_input, "bot": response})
+
+### Buttons for Updating Data ###
+st.subheader("Update Data")
+if st.button("Update News Data"):
+    fetch_and_update_news_data()
+
+if st.button("Update Market Data"):
+    fetch_and_update_market_data()
+
+### Generate Newsletter Button ###
 if st.button("Generate Newsletter"):
     st.write("Generating newsletter...")
     news_insights = researcher.execute_task("Extract insights from news data")
@@ -153,8 +222,7 @@ if st.button("Generate Newsletter"):
     risk_insights = risk_analyst.execute_task("Identify risks", additional_data=[news_insights, market_insights])
     generate_sequential_newsletter(news_insights, market_insights, risk_insights)
 
-st.subheader("Fact-Check with Bespoke Labs")
-
+### Fact-Check Newsletter Button ###
 if st.button("Fact-Check Newsletter"):
     factcheck_result = factcheck_with_bespoke_from_newsletter()
     if factcheck_result:
