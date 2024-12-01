@@ -34,7 +34,7 @@ def factcheck_with_bespoke(claim, context):
         st.error(f"Error with Bespoke Labs Fact-Check: {e}")
         return None
 
-def retrieve_from_multiple_rags(query, collections, top_k=5):
+def retrieve_from_multiple_rags(query, collections, top_k=3):
     """Search multiple collections for relevant RAG data."""
     results = []
     for collection_name in collections:
@@ -87,7 +87,7 @@ def fetch_and_update_ticker_trends_data():
     except Exception as e:
         st.error(f"Error updating ticker trends data: {e}")
 
-def retrieve_from_chromadb(collection_name, query, top_k=5):
+def retrieve_from_chromadb(collection_name, query, top_k=3):
     """Retrieve relevant documents from ChromaDB."""
     collection = client.get_or_create_collection(collection_name)
     try:
@@ -272,7 +272,7 @@ if st.button("Send"):
         user_input = user_input.strip()
 
         # Step 1: Check if it's a ticker query
-        if user_input.isalpha() and len(user_input) <= 5:  # Assuming stock tickers are alphabetic and <= 5 characters
+        if user_input.isalpha() and len(user_input) <= 3:  # Assuming stock tickers are alphabetic and <= 5 characters
             st.write(f"Fetching daily information for ticker: {user_input.upper()}...")
             ticker_result = fetch_ticker_price(user_input.upper())
             if "error" in ticker_result:
@@ -303,7 +303,7 @@ if st.button("Send"):
                 )
                 # Include recent conversation history in the prompt
                 memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-3:]]
                 )
                 prompt = (
                     f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
@@ -317,7 +317,7 @@ if st.button("Send"):
             else:
                 # Fallback to OpenAI GPT-4
                 memory_context = "\n".join(
-                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-5:]]
+                    [f"User: {entry['user']}\nBot: {entry['bot']}" for entry in st.session_state["conversation_history"][-3:]]
                 )
                 prompt = (
                     f"You are a helpful assistant. Below is the recent conversation history followed by the user's query. "
