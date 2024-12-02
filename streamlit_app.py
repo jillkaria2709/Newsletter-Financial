@@ -353,30 +353,29 @@ if uploaded_file:
     # Read the CSV file
     portfolio_df = pd.read_csv(uploaded_file)
 
+    # Display the uploaded portfolio
+    st.write("Uploaded Portfolio:")
+
     # Fetch stock data for each ticker
-    st.write("Processing portfolio data... Please wait.")
-    stock_data_dict = {}  # Dictionary to store stock data by ticker
+    st.write("Fetching stock data...")
+    stock_data = []
     for ticker in portfolio_df["Ticker"]:
         ticker_data = fetch_ticker_price(ticker)
-        stock_data_dict[ticker] = ticker_data if "error" not in ticker_data else None
+        stock_data.append(ticker_data)
 
-    # Add Stock Data column with alignment
-    portfolio_df["Stock Data"] = portfolio_df["Ticker"].map(stock_data_dict)
-
-    # Filter rows with valid stock data
-    valid_stocks = portfolio_df[portfolio_df["Stock Data"].notnull()]["Stock Data"].tolist()
-
+    # Process the data for recommendations
+    valid_stocks = [data for data in stock_data if "error" not in data]
     if valid_stocks:
+        st.write("Stock Data Summary:")
+        st.json(valid_stocks)
+
         # Use OpenAI to analyze and recommend actions
         analysis_prompt = (
             "Provide concise investment recommendations for the following portfolio. "
-            "Create two short paragraphs per investor with personalized suggestions based on their stocks. "
-            "The recommendations should include which stocks to hold, buy more of, or sell, and any additional insights.\n\n"
-            f"Portfolio Data: {portfolio_df.to_json(orient='records', indent=2)}"
+            "Create two short paragraphs per investor with personalized suggestions.\n\n"
+            f"Stock Data: {json.dumps(valid_stocks, indent=2)}"
         )
         recommendations = call_openai_gpt4(analysis_prompt)
-
-        # Display the recommendations
         st.subheader("Investment Recommendations")
         st.markdown(recommendations)
     else:
