@@ -353,16 +353,20 @@ if uploaded_file:
     # Read the CSV file
     portfolio_df = pd.read_csv(uploaded_file)
 
-    # Fetch stock data for each ticker (without displaying progress for individual tickers)
+    # Fetch stock data for each ticker
     st.write("Processing portfolio data... Please wait.")
-    stock_data = [fetch_ticker_price(ticker) for ticker in portfolio_df["Ticker"]]
+    stock_data_dict = {}  # Dictionary to store stock data by ticker
+    for ticker in portfolio_df["Ticker"]:
+        ticker_data = fetch_ticker_price(ticker)
+        stock_data_dict[ticker] = ticker_data if "error" not in ticker_data else None
 
-    # Process the data for recommendations
-    valid_stocks = [data for data in stock_data if "error" not in data]
+    # Add Stock Data column with alignment
+    portfolio_df["Stock Data"] = portfolio_df["Ticker"].map(stock_data_dict)
+
+    # Filter rows with valid stock data
+    valid_stocks = portfolio_df[portfolio_df["Stock Data"].notnull()]["Stock Data"].tolist()
+
     if valid_stocks:
-        # Combine portfolio data with stock data
-        portfolio_df["Stock Data"] = valid_stocks
-
         # Use OpenAI to analyze and recommend actions
         analysis_prompt = (
             "Provide concise investment recommendations for the following portfolio. "
