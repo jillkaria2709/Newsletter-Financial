@@ -7,6 +7,7 @@ import sys
 sys.modules['sqlite3'] = sys.modules.pop('pysqlite3')
 import chromadb
 from bespokelabs import BespokeLabs
+import pandas as pd
 
 # Initialize Bespoke Labs with the API key
 bl = BespokeLabs(auth_token=st.secrets["bespoke"]["api_key"])

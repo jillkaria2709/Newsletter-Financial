@@ -10,3 +10,4 @@ bespokelabs
 httpx==0.27.2
 matplotlib
 bs4
+pandas
