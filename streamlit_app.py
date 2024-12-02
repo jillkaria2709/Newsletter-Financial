@@ -343,6 +343,45 @@ if st.button("Fact-Check Newsletter"):
         st.write(f"Support Probability: {factcheck_result['support_prob']}")
         st.write(f"Details: {factcheck_result['details']}")
 
+### CSV Upload ###
+st.subheader("Upload Investor Portfolio")
+
+uploaded_file = st.file_uploader("Upload a CSV file with the following columns: Investor Name, Company, Invested Amount, Returns, Returns (%), Ticker", type=["csv"])
+
+if uploaded_file:
+    # Read the CSV file
+    portfolio_df = pd.read_csv(uploaded_file)
+
+    # Display the uploaded portfolio
+    st.write("Uploaded Portfolio:")
+    st.dataframe(portfolio_df)
+
+    # Fetch stock data for each ticker
+    st.write("Fetching stock data...")
+    stock_data = []
+    for ticker in portfolio_df["Ticker"]:
+        st.write(f"Fetching data for {ticker}...")
+        ticker_data = fetch_ticker_price(ticker)
+        stock_data.append(ticker_data)
+
+    # Process the data for recommendations
+    valid_stocks = [data for data in stock_data if "error" not in data]
+    if valid_stocks:
+        st.write("Stock Data Summary:")
+        st.json(valid_stocks)
+
+        # Use OpenAI to analyze and recommend actions
+        analysis_prompt = (
+            f"Analyze the following stock portfolio data and provide investment recommendations. "
+            f"Suggest which stocks to hold, buy more of, or sell. Use financial insights.\n\n"
+            f"Stock Data: {json.dumps(valid_stocks, indent=2)}"
+        )
+        recommendations = call_openai_gpt4(analysis_prompt)
+        st.subheader("Investment Recommendations")
+        st.markdown(recommendations)
+    else:
+        st.error("No valid stock data retrieved. Please check the tickers in your file.")
+
 ### Chatbot ###
 st.subheader("Chatbot")
 
