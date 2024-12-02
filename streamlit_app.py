@@ -366,16 +366,21 @@ if uploaded_file:
     # Process the data for recommendations
     valid_stocks = [data for data in stock_data if "error" not in data]
     if valid_stocks:
-        st.write("Stock Data Summary:")
-        st.json(valid_stocks)
-
-        # Use OpenAI to analyze and recommend actions
+        st.write("Generating recommendations...")
+        
+        # Generate prompt with explicit instructions to use investor names
         analysis_prompt = (
-            "Provide concise investment recommendations for the following portfolio. "
-            "Create two short paragraphs per investor with personalized suggestions.\n\n"
+            "Provide concise investment recommendations for each investor in the following portfolio. "
+            "Mention each investor by name and tailor the recommendations to their portfolio. "
+            "For each investor, create two short paragraphs with actionable suggestions such as which stocks to hold, buy more of, or sell, "
+            "and provide a brief justification for each recommendation.\n\n"
             f"Stock Data: {json.dumps(valid_stocks, indent=2)}"
         )
+
+        # Generate recommendations using OpenAI
         recommendations = call_openai_gpt4(analysis_prompt)
+
+        # Display the recommendations
         st.subheader("Investment Recommendations")
         st.markdown(recommendations)
     else:
